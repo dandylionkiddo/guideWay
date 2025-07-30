@@ -1,0 +1,35 @@
+
+# data provider
+data_provider:
+  dataset: mapillary
+  data_dir: /path/to/your/mapillary/dataset  # Mapillary Vistas 데이터셋 경로를 여기에 입력하세요.
+  train_batch_size: 16
+  test_batch_size: 16
+  n_worker: 8
+  image_size: 512
+
+# run config
+run_config:
+  n_epochs: 200
+  base_lr: 0.001
+  warmup_epochs: 10
+  warmup_lr: 0.0
+  lr_schedule_name: cosine
+  lr_schedule_param:
+    step: []
+  optimizer_name: adamw
+  optimizer_params:
+    betas: [0.9, 0.999]
+    eps: 1.0e-08
+  weight_decay: 0.01
+  no_wd_keys: []
+  grad_clip: null
+  reset_bn: false
+  reset_bn_size: 0
+  reset_bn_batch_size: 0
+  eval_image_size: [512]
+
+# model init
+model_init:
+  rand_init: trunc_normal
+  last_gamma: 0.0
