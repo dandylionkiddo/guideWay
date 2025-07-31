@@ -1,9 +1,25 @@
+# model
+model:
+  name: efficientvit_seg_b0
 
 # data provider
 data_provider:
-  dataset: mapillary
+  # `setup_data_provider`가 `SegDataProvider`를 선택하고,
+  # `train.py`가 모델 생성 함수에 데이터셋 종류를 알려주는 키
+  dataset: mapillary 
   data_dir: /path/to/your/mapillary/dataset  # Mapillary Vistas 데이터셋 경로를 여기에 입력하세요.
-  train_batch_size: 16
+  n_classes: 124 # Mapillary 데이터셋의 클래스 수
+
+  # SegDataProvider가 데이터셋 구조를 파악하는 데 사용하는 정보
+  train_split: training
+  val_split: validation
+  image_dir_name: images
+  label_dir_name: labels
+  image_suffix: .jpg
+  label_suffix: .png
+
+  # 데이터로더 설정
+  base_batch_size: 16
   test_batch_size: 16
   n_worker: 8
   image_size: 512
@@ -15,8 +31,6 @@ run_config:
   warmup_epochs: 10
   warmup_lr: 0.0
   lr_schedule_name: cosine
-  lr_schedule_param:
-    step: []
   optimizer_name: adamw
   optimizer_params:
     betas: [0.9, 0.999]
@@ -33,3 +47,4 @@ run_config:
 model_init:
   rand_init: trunc_normal
   last_gamma: 0.0
+  backbone_init_from: /path/to/your/cityscapes/checkpoint.pt

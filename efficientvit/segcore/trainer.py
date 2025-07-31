@@ -52,13 +52,13 @@ class SegTrainer(Trainer):
         )
         # 손실 함수로 CrossEntropyLoss를 사용하며, 255는 무시할 인덱스로 설정합니다.
         self.criterion = nn.CrossEntropyLoss(ignore_index=255)
-        # Mapillary Vistas 데이터셋의 클래스 수는 124개입니다.
-        self.n_classes = 124
+        # 데이터셋의 클래스 수를 data_provider에서 가져옵니다.
+        self.n_classes = data_provider.n_classes
 
     def _validate(self, model, data_loader, epoch) -> dict[str, Any]:
         """검증 데이터셋으로 모델 성능을 평가합니다."""
         val_loss = AverageMeter() # 손실 평균을 계산하기 위한 객체
-        val_iou = AverageMeter() # mIoU 평균을 계산하기 위한 객체
+        val_miou = AverageMeter() # mIoU 평균을 계산하기 위한 객체
         hist = np.zeros((self.n_classes, self.n_classes)) # 혼동 행렬 초기화
 
         with torch.no_grad(): # 그래디언트 계산 비활성화
@@ -101,10 +101,10 @@ class SegTrainer(Trainer):
 
         # mIoU 계산
         iu = np.diag(hist) / (hist.sum(axis=1) + hist.sum(axis=0) - np.diag(hist))
-        mean_iou = np.nanmean(iu)
-        val_iou.update(mean_iou, val_loss.get_count())
+        miou = np.nanmean(iu)
+        val_miou.update(miou, val_loss.get_count())
 
-        return {"val_loss": val_loss.avg, "val_iou": val_iou.avg}
+        return {"val_loss": val_loss.avg, "val_miou": val_miou.avg}
 
     def run_step(self, feed_dict: dict[str, Any]) -> dict[str, Any]:
         """단일 학습 스텝(배치)을 실행합니다."""
@@ -162,8 +162,8 @@ class SegTrainer(Trainer):
             val_info_dict = self.validate(epoch=epoch)
 
             # 최고의 성능을 보인 모델을 저장합니다.
-            is_best = val_info_dict["val_iou"] > self.best_val
-            self.best_val = max(val_info_dict["val_iou"], self.best_val)
+            is_best = val_info_dict["val_miou"] > self.best_val
+            self.best_val = max(val_info_dict["val_miou"], self.best_val)
 
             self.save_model(
                 only_state_dict=False,
