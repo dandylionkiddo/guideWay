@@ -49,6 +49,6 @@ run_config:
 model_init:
   rand_init: trunc_normal
   last_gamma: 0.0
-  # backbone_init_from: D:\AIffel\EfficientViT\efficientvit\efficientvit\assets\checkpoints\efficientvit_seg\efficientvit_seg_b0_cityscapes.pt
-  init_from: D:\AIffel\EfficientViT\efficientvit\efficientvit\assets\checkpoints\efficientvit_seg\efficientvit_seg_b0_cityscapes.pt
-  # backbone_init_from: D:\AIffel\EfficientViT\efficientvit\output\seg_test_run\20250801-154201\checkpoint\model_best.py
+  backbone_init_from: D:\AIffel\EfficientViT\efficientvit\efficientvit\assets\checkpoints\efficientvit_seg\efficientvit_seg_b0_cityscapes.pt
+  # init_from: D:\AIffel\EfficientViT\efficientvit\efficientvit\assets\checkpoints\efficientvit_seg\efficientvit_seg_b0_cityscapes.pt
+  # backbone_init_from: D:\AIffel\EfficientViT\efficientvit\output\seg_test_run\20250801-182414\checkpoint\model_best.pt

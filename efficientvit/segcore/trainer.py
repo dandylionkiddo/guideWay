@@ -169,7 +169,7 @@ class SegTrainer(Trainer):
             self.best_val = max(val_info_dict["val_miou"], self.best_val)
 
             self.save_model(
-                only_state_dict=False,
+                only_state_dict=True,
                 epoch=epoch,
                 model_name="model_best.pt" if is_best else "checkpoint.pt",
             )

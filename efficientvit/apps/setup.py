@@ -212,11 +212,11 @@ def init_model(
     # 사전 학습된 가중치 로드
     if init_from is not None and os.path.isfile(init_from):
         # 전체 모델 가중치 로드
-        network.load_state_dict(load_state_dict_from_file(init_from))
+        network.load_state_dict(load_state_dict_from_file(init_from), strict=False)
         print(f"Loaded init from {init_from}")
     elif backbone_init_from is not None and os.path.isfile(backbone_init_from):
         # 백본 가중치만 로드
-        network.backbone.load_state_dict(load_state_dict_from_file(backbone_init_from))
+        network.backbone.load_state_dict(load_state_dict_from_file(backbone_init_from), strict=False)
         print(f"Loaded backbone init from {backbone_init_from}")
     else:
         print(f"Random init ({rand_init}) with last gamma {last_gamma}")
