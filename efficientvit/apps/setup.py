@@ -126,7 +126,7 @@ def setup_exp_config(config_path: str, recursive=True, opt_args: Optional[dict] 
 
 
 def setup_data_provider(
-    exp_config: dict, data_provider_classes: list[type[DataProvider]], is_distributed: bool = True
+    exp_config: dict, data_provider_classes: list[type[DataProvider]], is_distributed: bool = False
 ) -> DataProvider:
     """
     설정 파일에 따라 데이터 프로바이더를 선택하고 구성합니다.
@@ -156,7 +156,7 @@ def setup_data_provider(
     # 데이터 프로바이더 클래스의 `name` 속성을 키로 하는 룩업 테이블 생성
     data_provider_lookup = {provider.name: provider for provider in data_provider_classes}
     # 설정 파일의 `dataset` 이름에 해당하는 클래스를 룩업 테이블에서 선택
-    data_provider_class = data_provider_lookup[dp_config["dataset"]]
+    data_provider_class = data_provider_lookup[dp_config["task"]]
 
     # 선택된 클래스의 `__init__`에 필요한 인자들을 설정에서 자동으로 추출
     data_provider_kwargs = build_kwargs_from_config(dp_config, data_provider_class)

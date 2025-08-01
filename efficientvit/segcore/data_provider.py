@@ -88,6 +88,8 @@ class SegDataProvider(DataProvider):
     일반 세그멘테이션 데이터셋을 위한 데이터 프로바이더.
     설정에 따라 데이터 로더와 증강을 설정합니다.
     """
+
+    name = "seg"
     
     def __init__(
         self,
@@ -110,7 +112,16 @@ class SegDataProvider(DataProvider):
         train_split: str = "train",
         val_split: str = "val",
     ):
+        # 데이터셋별 속성 저장
         self.data_dir = data_dir
+        self.n_classes = n_classes
+        self.image_dir_name = image_dir_name
+        self.label_dir_name = label_dir_name
+        self.image_suffix = image_suffix
+        self.label_suffix = label_suffix
+        self.train_split = train_split
+        self.val_split = val_split
+
         super().__init__(
             train_batch_size,
             test_batch_size,
@@ -122,14 +133,6 @@ class SegDataProvider(DataProvider):
             train_ratio,
             drop_last,
         )
-        # 데이터셋별 속성 저장
-        self.n_classes = n_classes
-        self.image_dir_name = image_dir_name
-        self.label_dir_name = label_dir_name
-        self.image_suffix = image_suffix
-        self.label_suffix = label_suffix
-        self.train_split = train_split
-        self.val_split = val_split
 
     def build_train_transform(self, image_size: Optional[tuple[int, int]] = None) -> Any:
         """학습 데이터에 적용할 이미지 변환 파이프라인을 구축합니다."""

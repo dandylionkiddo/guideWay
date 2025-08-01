@@ -6,8 +6,9 @@ model:
 data_provider:
   # `setup_data_provider`가 `SegDataProvider`를 선택하고,
   # `train.py`가 모델 생성 함수에 데이터셋 종류를 알려주는 키
+  task: seg
   dataset: mapillary 
-  data_dir: /path/to/your/mapillary/dataset  # Mapillary Vistas 데이터셋 경로를 여기에 입력하세요.
+  data_dir: D:\AIffel\EfficientViT\data\mapillary-vistas-dataset_public_v2.0\demo_training  # Mapillary Vistas 데이터셋 경로를 여기에 입력하세요.
   n_classes: 124 # Mapillary 데이터셋의 클래스 수
 
   # SegDataProvider가 데이터셋 구조를 파악하는 데 사용하는 정보
@@ -26,11 +27,12 @@ data_provider:
 
 # run config
 run_config:
-  n_epochs: 200
+  n_epochs: 3
   base_lr: 0.001
   warmup_epochs: 10
   warmup_lr: 0.0
   lr_schedule_name: cosine
+  lr_schedule_param: {}
   optimizer_name: adamw
   optimizer_params:
     betas: [0.9, 0.999]
@@ -47,4 +49,4 @@ run_config:
 model_init:
   rand_init: trunc_normal
   last_gamma: 0.0
-  backbone_init_from: /path/to/your/cityscapes/checkpoint.pt
+#  backbone_init_from: D:\AIffel\EfficientViT\efficientvit\efficientvit\assets\checkpoints\efficientvit_seg\efficientvit_seg_b0_cityscapes.pt

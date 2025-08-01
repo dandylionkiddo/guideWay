@@ -35,11 +35,11 @@ def is_dist_initialized() -> bool:
 
 
 def get_dist_rank() -> int:
-    return int(os.environ["RANK"])
+    return int(os.environ.get("RANK", "0"))
 
 
 def get_dist_size() -> int:
-    return int(os.environ["WORLD_SIZE"])
+    return int(os.environ.get("WORLD_SIZE", "1"))
 
 
 def is_master() -> bool:
@@ -52,7 +52,7 @@ def dist_barrier() -> None:
 
 
 def get_dist_local_rank() -> int:
-    return int(os.environ["LOCAL_RANK"])
+    return int(os.environ.get("LOCAL_RANK", "0"))
 
 
 def sync_tensor(tensor: torch.Tensor | float, reduce="mean") -> torch.Tensor | list[torch.Tensor]:

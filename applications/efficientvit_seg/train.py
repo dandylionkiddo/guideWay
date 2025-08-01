@@ -34,7 +34,7 @@ def main():
     data_provider = setup_data_provider(
         exp_config,
         data_provider_classes=ALL_SEG_DATA_PROVIDERS,
-        is_distributed=True,
+        is_distributed=False,
     )
 
     # 학습 실행 관련 설정을 구성
@@ -47,7 +47,7 @@ def main():
 
     # 데이터 프로바이더로부터 데이터셋 이름을 받아와 모델을 생성합니다.
     # 클래스 수(n_classes)와 같은 세부 설정은 이제 `seg.py`의 모델 함수가 알아서 처리합니다.
-    model = model_func(dataset=data_provider.name)
+    model = model_func(dataset=exp_config["data_provider"]["dataset"])
     
     # 설정 파일의 `model_init` 섹션을 `init_model` 함수의 인자로 전달합니다.
     # `**`는 딕셔너리를 키워드 인자로 풀어주는 역할을 합니다.

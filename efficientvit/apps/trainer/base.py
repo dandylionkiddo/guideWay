@@ -6,7 +6,7 @@ import torch.nn as nn
 
 from efficientvit.apps.data_provider import DataProvider, parse_image_size
 from efficientvit.apps.trainer.run_config import RunConfig
-from efficientvit.apps.utils import EMA, dist_barrier, get_dist_local_rank, is_master
+from efficientvit.apps.utils import EMA, dist_barrier, get_dist_local_rank, get_dist_size, is_master
 from efficientvit.models.nn.norm import reset_bn
 from efficientvit.models.utils import is_parallel, load_state_dict_from_file
 
@@ -202,11 +202,12 @@ class Trainer:
 
     def prep_for_training(self, run_config: RunConfig, ema_decay: Optional[float] = None, amp="fp32") -> None:
         self.run_config = run_config
-        self.model = nn.parallel.DistributedDataParallel(
-            self.model.cuda(),
-            device_ids=[get_dist_local_rank()],
-            static_graph=True,
-        )
+        if get_dist_size() > 1:
+            self.model = nn.parallel.DistributedDataParallel(
+                self.model.cuda(),
+                device_ids=[get_dist_local_rank()],
+                static_graph=True,
+            )
 
         self.run_config.global_step = 0
         self.run_config.batch_per_epoch = len(self.data_provider.train)
