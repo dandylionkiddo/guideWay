@@ -5,6 +5,7 @@ import torch
 # EfficientViT 관련 유틸리티 및 클래스 임포트
 from efficientvit.apps.trainer import RunConfig
 from efficientvit.apps.setup import setup_exp_config, setup_data_provider, setup_run_config, init_model
+from efficientvit.apps.utils import get_dist_size
 # `seg.py`에 있는 모든 모델을 동적으로 사용하기 위해 모듈을 임포트
 from efficientvit.models.efficientvit import seg as models
 from efficientvit.segcore.data_provider import SegDataProvider
@@ -34,7 +35,7 @@ def main():
     data_provider = setup_data_provider(
         exp_config,
         data_provider_classes=ALL_SEG_DATA_PROVIDERS,
-        is_distributed=False,
+        is_distributed=get_dist_size() > 1,
     )
 
     # 학습 실행 관련 설정을 구성

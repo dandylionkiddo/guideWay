@@ -74,13 +74,14 @@ class SegTrainer(Trainer):
 
                     # 모델 예측
                     output = model(images)
+                    output = F.interpolate(output, size=labels.shape[1:], mode='bilinear', align_corners=True)
+
                     # 손실 계산
                     loss = self.criterion(output, labels)
 
                     val_loss.update(loss.item(), images.size(0))
                     
                     # IoU 계산을 위한 예측 및 혼동 행렬 업데이트
-                    output = F.interpolate(output, size=labels.shape[1:], mode='bilinear', align_corners=True)
                     pred = torch.argmax(output, dim=1)
                     hist += _fast_hist(labels.cpu().numpy(), pred.cpu().numpy(), self.n_classes)
 
@@ -95,7 +96,7 @@ class SegTrainer(Trainer):
                     t.update()
         
         # 분산 학습 환경에서 모든 프로세스의 혼동 행렬을 동기화합니다.
-        if self.data_provider.num_replicas > 1:
+        if self.data_provider.num_replicas is not None:
             hist_tensor = torch.from_numpy(hist).cuda()
             hist = sync_tensor(hist_tensor, reduce='sum').cpu().numpy()
 
@@ -114,6 +115,7 @@ class SegTrainer(Trainer):
         # Automatic Mixed Precision (AMP) 활성화
         with torch.autocast(device_type="cuda", dtype=self.amp_dtype, enabled=self.enable_amp):
             output = self.model(images)
+            output = F.interpolate(output, size=labels.shape[1:], mode='bilinear', align_corners=True)
             loss = self.criterion(output, labels)
         
         # 손실에 대한 그래디언트를 계산하고 역전파합니다.
@@ -159,7 +161,7 @@ class SegTrainer(Trainer):
         for epoch in range(self.start_epoch, self.run_config.n_epochs):
             self.data_provider.set_epoch(epoch)
             self.train_one_epoch(epoch)
-            val_info_dict = self.validate(epoch=epoch)
+            val_info_dict = self.validate(epoch=epoch, is_test=False)
 
             # 최고의 성능을 보인 모델을 저장합니다.
             is_best = val_info_dict["val_miou"] > self.best_val
