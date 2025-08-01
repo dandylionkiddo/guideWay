@@ -4,8 +4,8 @@
 
 ## 시작 코드
 <pre> conda create -n efficientvit python=3.10
-  conda activate efficientvit
-  pip install -U -r requirements.txt  </pre>
+conda activate efficientvit
+pip install -U -r requirements.txt  </pre>
 
 ## 학습 실행 코드
 <pre> PYTHONUTF8=1 python applications/efficientvit_seg/train.py \
