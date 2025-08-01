@@ -3,10 +3,15 @@
 * 데이터셋 저장 X, 코드 위주로 저장하기
 
 ## 시작 코드
-<pre> ```bash conda create -n efficientvit python=3.10 conda activate efficientvit pip install -U -r requirements.txt ``` </pre>
+<pre>  conda create -n efficientvit python=3.10
+  conda activate efficientvit
+  pip install -U -r requirements.txt  </pre>
 
 ## 학습 실행 코드
-<pre> ```bash conda activate efficientvit PYTHONUTF8=1 python applications/efficientvit_seg/train.py \ --config applications/efficientvit_seg/mapillary.yaml \ --path output/seg_test_run ``` </pre>
+<pre> conda activate efficientvit 
+  PYTHONUTF8=1 python applications/efficientvit_seg/train.py \
+  --config applications/efficientvit_seg/mapillary.yaml \
+  --path output/seg_test_run  </pre>
 
 ## 현재 문제점
 1. pretrained checkpoint를 불러오는 경우 파라미터 개수 에러
