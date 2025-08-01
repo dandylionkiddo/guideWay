@@ -1,4 +1,5 @@
 import argparse
+import json
 import math
 import os
 import pathlib
@@ -45,6 +46,11 @@ class Resize(object):
                 image,
                 dsize=(width, height),
                 interpolation=self.interpolation,
+            )
+            target = cv2.resize(
+                target,
+                dsize=(width, height),
+                interpolation=cv2.INTER_NEAREST,
             )
         return {
             "data": image,
@@ -602,6 +608,343 @@ class ADE20KDataset(Dataset):
         }
 
 
+class MapillaryDataset(Dataset):
+    """Mapillary Vistas Dataset v2.0 - 124 classes (complete set)"""
+    
+    # 124개 모든 클래스 (config_v2.0.json 기반)
+    classes = (
+        "Bird",
+        "Ground Animal",
+        "Ambiguous Barrier",
+        "Concrete Block",
+        "Curb",
+        "Fence",
+        "Guard Rail",
+        "Barrier",
+        "Road Median",
+        "Road Side",
+        "Lane Separator",
+        "Temporary Barrier",
+        "Wall",
+        "Bike Lane",
+        "Crosswalk - Plain",
+        "Curb Cut",
+        "Driveway",
+        "Parking",
+        "Parking Aisle",
+        "Pedestrian Area",
+        "Rail Track",
+        "Road",
+        "Road Shoulder",
+        "Service Lane",
+        "Sidewalk",
+        "Traffic Island",
+        "Bridge",
+        "Building",
+        "Garage",
+        "Tunnel",
+        "Person",
+        "Person Group",
+        "Bicyclist",
+        "Motorcyclist",
+        "Other Rider",
+        "Lane Marking - Dashed Line",
+        "Lane Marking - Straight Line",
+        "Lane Marking - Zigzag Line",
+        "Lane Marking - Ambiguous",
+        "Lane Marking - Arrow (Left)",
+        "Lane Marking - Arrow (Other)",
+        "Lane Marking - Arrow (Right)",
+        "Lane Marking - Arrow (Split Left or Straight)",
+        "Lane Marking - Arrow (Split Right or Straight)",
+        "Lane Marking - Arrow (Straight)",
+        "Lane Marking - Crosswalk",
+        "Lane Marking - Give Way (Row)",
+        "Lane Marking - Give Way (Single)",
+        "Lane Marking - Hatched (Chevron)",
+        "Lane Marking - Hatched (Diagonal)",
+        "Lane Marking - Other",
+        "Lane Marking - Stop Line",
+        "Lane Marking - Symbol (Bicycle)",
+        "Lane Marking - Symbol (Other)",
+        "Lane Marking - Text",
+        "Lane Marking (only) - Dashed Line",
+        "Lane Marking (only) - Crosswalk",
+        "Lane Marking (only) - Other",
+        "Lane Marking (only) - Test",
+        "Mountain",
+        "Sand",
+        "Sky",
+        "Snow",
+        "Terrain",
+        "Vegetation",
+        "Water",
+        "Banner",
+        "Bench",
+        "Bike Rack",
+        "Catch Basin",
+        "CCTV Camera",
+        "Fire Hydrant",
+        "Junction Box",
+        "Mailbox",
+        "Manhole",
+        "Parking Meter",
+        "Phone Booth",
+        "Pothole",
+        "Signage - Advertisement",
+        "Signage - Ambiguous",
+        "Signage - Back",
+        "Signage - Information",
+        "Signage - Other",
+        "Signage - Store",
+        "Street Light",
+        "Pole",
+        "Pole Group",
+        "Traffic Sign Frame",
+        "Utility Pole",
+        "Traffic Cone",
+        "Traffic Light - General (Single)",
+        "Traffic Light - Pedestrians",
+        "Traffic Light - General (Upright)",
+        "Traffic Light - General (Horizontal)",
+        "Traffic Light - Cyclists",
+        "Traffic Light - Other",
+        "Traffic Sign - Ambiguous",
+        "Traffic Sign (Back)",
+        "Traffic Sign - Direction (Back)",
+        "Traffic Sign - Direction (Front)",
+        "Traffic Sign (Front)",
+        "Traffic Sign - Parking",
+        "Traffic Sign - Temporary (Back)",
+        "Traffic Sign - Temporary (Front)",
+        "Trash Can",
+        "Bicycle",
+        "Boat",
+        "Bus",
+        "Car",
+        "Caravan",
+        "Motorcycle",
+        "On Rails",
+        "Other Vehicle",
+        "Trailer",
+        "Truck",
+        "Vehicle Group",
+        "Wheeled Slow",
+        "Water Valve",
+        "Car Mount",
+        "Dynamic",
+        "Ego Vehicle",
+        "Ground",
+        "Static",
+        "Unlabeled",
+    )
+    
+    # 124개 클래스 색상 팔레트 (config_v2.0.json 기반)
+    class_colors = (
+        [165, 42, 42],      # Bird
+        [0, 192, 0],        # Ground Animal
+        [250, 170, 31],     # Ambiguous Barrier
+        [250, 170, 32],     # Concrete Block
+        [196, 196, 196],    # Curb
+        [190, 153, 153],    # Fence
+        [180, 165, 180],    # Guard Rail
+        [90, 120, 150],     # Barrier
+        [250, 170, 33],     # Road Median
+        [250, 170, 34],     # Road Side
+        [128, 128, 128],    # Lane Separator
+        [250, 170, 35],     # Temporary Barrier
+        [102, 102, 156],    # Wall
+        [128, 64, 255],     # Bike Lane
+        [140, 140, 200],    # Crosswalk - Plain
+        [170, 170, 170],    # Curb Cut
+        [250, 170, 36],     # Driveway
+        [250, 170, 160],    # Parking
+        [250, 170, 37],     # Parking Aisle
+        [96, 96, 96],       # Pedestrian Area
+        [230, 150, 140],    # Rail Track
+        [128, 64, 128],     # Road
+        [110, 110, 110],    # Road Shoulder
+        [110, 110, 110],    # Service Lane
+        [244, 35, 232],     # Sidewalk
+        [128, 196, 128],    # Traffic Island
+        [150, 100, 100],    # Bridge
+        [70, 70, 70],       # Building
+        [150, 150, 150],    # Garage
+        [150, 120, 90],     # Tunnel
+        [220, 20, 60],      # Person
+        [220, 20, 60],      # Person Group
+        [255, 0, 0],        # Bicyclist
+        [255, 0, 100],      # Motorcyclist
+        [255, 0, 200],      # Other Rider
+        [255, 255, 255],    # Lane Marking - Dashed Line
+        [255, 255, 255],    # Lane Marking - Straight Line
+        [250, 170, 29],     # Lane Marking - Zigzag Line
+        [250, 170, 28],     # Lane Marking - Ambiguous
+        [250, 170, 26],     # Lane Marking - Arrow (Left)
+        [250, 170, 25],     # Lane Marking - Arrow (Other)
+        [250, 170, 24],     # Lane Marking - Arrow (Right)
+        [250, 170, 22],     # Lane Marking - Arrow (Split Left or Straight)
+        [250, 170, 21],     # Lane Marking - Arrow (Split Right or Straight)
+        [250, 170, 20],     # Lane Marking - Arrow (Straight)
+        [255, 255, 255],    # Lane Marking - Crosswalk
+        [250, 170, 19],     # Lane Marking - Give Way (Row)
+        [250, 170, 18],     # Lane Marking - Give Way (Single)
+        [250, 170, 12],     # Lane Marking - Hatched (Chevron)
+        [250, 170, 11],     # Lane Marking - Hatched (Diagonal)
+        [255, 255, 255],    # Lane Marking - Other
+        [255, 255, 255],    # Lane Marking - Stop Line
+        [250, 170, 16],     # Lane Marking - Symbol (Bicycle)
+        [250, 170, 15],     # Lane Marking - Symbol (Other)
+        [250, 170, 15],     # Lane Marking - Text
+        [255, 255, 255],    # Lane Marking (only) - Dashed Line
+        [255, 255, 255],    # Lane Marking (only) - Crosswalk
+        [255, 255, 255],    # Lane Marking (only) - Other
+        [255, 255, 255],    # Lane Marking (only) - Test
+        [64, 170, 64],      # Mountain
+        [230, 160, 50],     # Sand
+        [70, 130, 180],     # Sky
+        [190, 255, 255],    # Snow
+        [152, 251, 152],    # Terrain
+        [107, 142, 35],     # Vegetation
+        [0, 170, 30],       # Water
+        [255, 255, 128],    # Banner
+        [250, 0, 30],       # Bench
+        [100, 140, 180],    # Bike Rack
+        [220, 128, 128],    # Catch Basin
+        [222, 40, 40],      # CCTV Camera
+        [100, 170, 30],     # Fire Hydrant
+        [40, 40, 40],       # Junction Box
+        [33, 33, 33],       # Mailbox
+        [100, 128, 160],    # Manhole
+        [20, 20, 255],      # Parking Meter
+        [142, 0, 0],        # Phone Booth
+        [70, 100, 150],     # Pothole
+        [250, 171, 30],     # Signage - Advertisement
+        [250, 172, 30],     # Signage - Ambiguous
+        [250, 173, 30],     # Signage - Back
+        [250, 174, 30],     # Signage - Information
+        [250, 175, 30],     # Signage - Other
+        [250, 176, 30],     # Signage - Store
+        [210, 170, 100],    # Street Light
+        [153, 153, 153],    # Pole
+        [153, 153, 153],    # Pole Group
+        [128, 128, 128],    # Traffic Sign Frame
+        [0, 0, 80],         # Utility Pole
+        [210, 60, 60],      # Traffic Cone
+        [250, 170, 30],     # Traffic Light - General (Single)
+        [250, 170, 30],     # Traffic Light - Pedestrians
+        [250, 170, 30],     # Traffic Light - General (Upright)
+        [250, 170, 30],     # Traffic Light - General (Horizontal)
+        [250, 170, 30],     # Traffic Light - Cyclists
+        [250, 170, 30],     # Traffic Light - Other
+        [192, 192, 192],    # Traffic Sign - Ambiguous
+        [192, 192, 192],    # Traffic Sign (Back)
+        [192, 192, 192],    # Traffic Sign - Direction (Back)
+        [220, 220, 0],      # Traffic Sign - Direction (Front)
+        [220, 220, 0],      # Traffic Sign (Front)
+        [0, 0, 196],        # Traffic Sign - Parking
+        [192, 192, 192],    # Traffic Sign - Temporary (Back)
+        [220, 220, 0],      # Traffic Sign - Temporary (Front)
+        [140, 140, 20],     # Trash Can
+        [119, 11, 32],      # Bicycle
+        [150, 0, 255],      # Boat
+        [0, 60, 100],       # Bus
+        [0, 0, 142],        # Car
+        [0, 0, 90],         # Caravan
+        [0, 0, 230],        # Motorcycle
+        [0, 80, 100],       # On Rails
+        [128, 64, 64],      # Other Vehicle
+        [0, 0, 110],        # Trailer
+        [0, 0, 70],         # Truck
+        [0, 0, 142],        # Vehicle Group
+        [0, 0, 192],        # Wheeled Slow
+        [170, 170, 170],    # Water Valve
+        [32, 32, 32],       # Car Mount
+        [111, 74, 0],       # Dynamic
+        [120, 10, 10],      # Ego Vehicle
+        [81, 0, 81],        # Ground
+        [111, 111, 0],      # Static
+        [0, 0, 0],          # Unlabeled
+    )
+
+    def __init__(self, data_dir: str, crop_size: Optional[tuple[int, int]] = None):
+        super().__init__()
+
+        # load samples - Mapillary 구조: split/images/ + split/v2.0/labels/
+        samples = []
+        image_dir = os.path.join(data_dir, "images")
+        label_dir = os.path.join(data_dir, "v2.0", "labels")
+        
+        if not os.path.exists(image_dir):
+            raise FileNotFoundError(f"Image directory not found: {image_dir}")
+        if not os.path.exists(label_dir):
+            print(f"Warning: Label directory not found: {label_dir}")
+            print("This might be a testing split without labels")
+            # testing 폴더의 경우 라벨 없이 진행
+            for fname in sorted(os.listdir(image_dir)):
+                if fname.lower().endswith('.jpg'):
+                    image_path = os.path.join(image_dir, fname)
+                    samples.append((image_path, None))
+        else:
+            # validation/training 폴더의 경우 라벨과 함께
+            for fname in sorted(os.listdir(image_dir)):
+                if fname.lower().endswith('.jpg'):
+                    image_path = os.path.join(image_dir, fname)
+                    # .jpg -> .png 변환
+                    label_fname = os.path.splitext(fname)[0] + '.png'
+                    label_path = os.path.join(label_dir, label_fname)
+                    
+                    if os.path.exists(label_path):
+                        samples.append((image_path, label_path))
+                    else:
+                        print(f"Warning: Label not found for {fname}")
+        
+        if len(samples) == 0:
+            raise ValueError(f"No valid samples found in {data_dir}")
+        
+        self.samples = samples
+        print(f"Found {len(samples)} samples in Mapillary dataset")
+
+        # build transform
+        self.transform = transforms.Compose(
+            [
+                Resize(crop_size),
+                ToTensor(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+            ]
+        )
+
+    def __len__(self) -> int:
+        return len(self.samples)
+
+    def __getitem__(self, index: int) -> dict[str, Any]:
+        image_path, mask_path = self.samples[index]
+        
+        # 이미지 로드
+        image = np.array(Image.open(image_path).convert("RGB"))
+        
+        # 마스크 로드 (있는 경우)
+        if mask_path is not None:
+            mask = np.array(Image.open(mask_path), dtype=np.int64)
+            # Mapillary는 0-indexed 이므로 그대로 사용
+            # 다만 124 이상의 값은 무시
+            mask[mask >= len(self.classes)] = -1
+        else:
+            # testing의 경우 더미 마스크
+            mask = np.full(image.shape[:2], -1, dtype=np.int64)
+
+        feed_dict = {
+            "data": image,
+            "label": mask,
+        }
+        feed_dict = self.transform(feed_dict)
+        return {
+            "index": index,
+            "image_path": image_path,
+            "mask_path": mask_path if mask_path is not None else "",
+            **feed_dict,
+        }
+
+
 def get_canvas(
     image: np.ndarray,
     mask: np.ndarray,
@@ -614,7 +957,8 @@ def get_canvas(
         mask = cv2.resize(mask, dsize=(image_shape[1], image_shape[0]), interpolation=cv2.INTER_NEAREST)
     seg_mask = np.zeros_like(image, dtype=np.uint8)
     for k, color in enumerate(colors):
-        seg_mask[mask == k, :] = color
+        if k < len(colors):
+            seg_mask[mask == k, :] = color
     canvas = seg_mask * opacity + image * (1 - opacity)
     canvas = np.asarray(canvas, dtype=np.uint8)
     return canvas
@@ -622,12 +966,12 @@ def get_canvas(
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--path", type=str, default="~/dataset/cityscapes/leftImg8bit/val")
-    parser.add_argument("--dataset", type=str, default="cityscapes", choices=["cityscapes", "ade20k"])
+    parser.add_argument("--path", type=str, default="~/dataset/mapillary/validation")
+    parser.add_argument("--dataset", type=str, default="mapillary", choices=["cityscapes", "ade20k", "mapillary"])
     parser.add_argument("--gpu", type=str, default="0")
     parser.add_argument("--batch_size", help="batch size per gpu", type=int, default=1)
     parser.add_argument("-j", "--workers", help="number of workers", type=int, default=4)
-    parser.add_argument("--crop_size", type=int, default=1024)
+    parser.add_argument("--crop_size", type=int, default=512)
     parser.add_argument("--model", type=str)
     parser.add_argument("--weight_url", type=str, default=None)
     parser.add_argument("--save_path", type=str, default=None)
@@ -647,8 +991,11 @@ def main():
         dataset = CityscapesDataset(args.path, (args.crop_size, args.crop_size * 2))
     elif args.dataset == "ade20k":
         dataset = ADE20KDataset(args.path, crop_size=args.crop_size)
+    elif args.dataset == "mapillary":
+        dataset = MapillaryDataset(args.path, (args.crop_size, args.crop_size))
     else:
         raise NotImplementedError
+    
     data_loader = torch.utils.data.DataLoader(
         dataset,
         batch_size=args.batch_size,
@@ -664,9 +1011,11 @@ def main():
 
     if args.save_path is not None:
         os.makedirs(args.save_path, exist_ok=True)
+    
     interaction = AverageMeter(is_distributed=False)
     union = AverageMeter(is_distributed=False)
     iou = SegIOU(len(dataset.classes))
+    
     with torch.inference_mode():
         with tqdm(total=len(data_loader), desc=f"Eval {args.model} on {args.dataset}") as t:
             for feed_dict in data_loader:
