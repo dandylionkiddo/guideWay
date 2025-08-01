@@ -27,7 +27,7 @@ data_provider:
 
 # run config
 run_config:
-  n_epochs: 3
+  n_epochs: 5
   base_lr: 0.001
   warmup_epochs: 10
   warmup_lr: 0.0
@@ -49,4 +49,4 @@ run_config:
 model_init:
   rand_init: trunc_normal
   last_gamma: 0.0
-#  backbone_init_from: D:\AIffel\EfficientViT\efficientvit\efficientvit\assets\checkpoints\efficientvit_seg\efficientvit_seg_b0_cityscapes.pt
+  backbone_init_from: D:\AIffel\EfficientViT\efficientvit\efficientvit\assets\checkpoints\efficientvit_seg\efficientvit_seg_b0_cityscapes.pt

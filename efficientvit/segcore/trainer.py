@@ -162,6 +162,7 @@ class SegTrainer(Trainer):
             self.data_provider.set_epoch(epoch)
             self.train_one_epoch(epoch)
             val_info_dict = self.validate(epoch=epoch, is_test=False)
+            self.write_log(f"Epoch {epoch + 1} Validation: Loss={val_info_dict['val_loss']:.4f}, mIoU={val_info_dict['val_miou']:.4f}", prefix="valid")
 
             # 최고의 성능을 보인 모델을 저장합니다.
             is_best = val_info_dict["val_miou"] > self.best_val

@@ -1,5 +1,6 @@
 import os
 from typing import Any, Optional
+from datetime import datetime
 
 import torch
 import torch.nn as nn
@@ -15,7 +16,9 @@ __all__ = ["Trainer"]
 
 class Trainer:
     def __init__(self, path: str, model: nn.Module, data_provider: DataProvider):
-        self.path = os.path.realpath(os.path.expanduser(path))
+        # 타임스탬프를 포함한 고유한 경로 생성
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        self.path = os.path.join(os.path.realpath(os.path.expanduser(path)), timestamp)
         self.model = model.cuda()
         self.data_provider = data_provider
 
@@ -83,22 +86,36 @@ class Trainer:
 
     def load_model(self, model_fname=None) -> None:
         latest_fname = os.path.join(self.checkpoint_path, "latest.txt")
-        if model_fname is None and os.path.exists(latest_fname):
+        actual_model_fname = None
+
+        if os.path.exists(latest_fname):
             with open(latest_fname, "r") as fin:
-                model_fname = fin.readline()
-                if len(model_fname) > 0 and model_fname[-1] == "\n":
-                    model_fname = model_fname[:-1]
+                model_fname_from_file = fin.readline().strip()
+                if model_fname_from_file:
+                    actual_model_fname = model_fname_from_file
+        
+        if model_fname is not None:
+            # 사용자가 특정 모델 파일을 지정한 경우
+            if os.path.exists(model_fname):
+                actual_model_fname = model_fname
+            elif os.path.exists(os.path.join(self.checkpoint_path, os.path.basename(model_fname))):
+                actual_model_fname = os.path.join(self.checkpoint_path, os.path.basename(model_fname))
+            else:
+                # 지정된 모델 파일이 없으면 기본 체크포인트 시도
+                actual_model_fname = os.path.join(self.checkpoint_path, "checkpoint.pt")
+        elif actual_model_fname is None:
+            # latest.txt도 없고, model_fname도 지정 안된 경우 기본 체크포인트 시도
+            actual_model_fname = os.path.join(self.checkpoint_path, "checkpoint.pt")
+
+        if not os.path.exists(actual_model_fname):
+            # 로드할 체크포인트 파일이 아예 없는 경우, 조용히 넘어감
+            return
+
         try:
-            if model_fname is None:
-                model_fname = f"{self.checkpoint_path}/checkpoint.pt"
-            elif not os.path.exists(model_fname):
-                model_fname = f"{self.checkpoint_path}/{os.path.basename(model_fname)}"
-                if not os.path.exists(model_fname):
-                    model_fname = f"{self.checkpoint_path}/checkpoint.pt"
-            print(f"=> loading checkpoint {model_fname}")
-            checkpoint = load_state_dict_from_file(model_fname, False)
-        except Exception:
-            self.write_log(f"fail to load checkpoint from {self.checkpoint_path}")
+            print(f"=> loading checkpoint {actual_model_fname}")
+            checkpoint = load_state_dict_from_file(actual_model_fname, False)
+        except Exception as e:
+            self.write_log(f"fail to load checkpoint from {actual_model_fname}. Error: {e}")
             return
 
         # load checkpoint
