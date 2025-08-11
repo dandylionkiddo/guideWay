@@ -13,7 +13,5 @@ pip install -U -r requirements.txt  </pre>
   --path output/seg_test_run  </pre>
 
 ## 현재 문제점
-1. pretrained checkpoint를 불러오는 경우 파라미터 개수 에러
-2. 체크포인트 저장 디렉토리를 구분하지 않아 실험마다 체크포인트가 계속 갱신 (저장해둘 수 없음)
-3. valid.log 파일에 로그 결과가 남지 않음 (체크포인트를 불러올 수 없다는 오류)
-4. validation이나 test를 단독으로 진행하여 성능을 확인하는 코드가 없음
+1. inference를 수행하는 코드의 코드 단일 책임 원칙 지키기
+2. Mapillary 클래스 수 줄여서 학습 및 추론 가능한지 확인
