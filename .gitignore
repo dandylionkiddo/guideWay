@@ -23,3 +23,5 @@ error_debug.txt
 output/
 efficientvit.egg-info/
 results/
+create_config_txt.py
+new_classes.txt

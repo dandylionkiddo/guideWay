@@ -150,6 +150,20 @@ def efficientvit_seg_b0(dataset: str, **kwargs) -> EfficientViTSeg:
             n_classes=124,
             **build_kwargs_from_config(kwargs, SegHead),
         )
+    elif dataset == "mapillary-30":
+        head = SegHead(
+            fid_list=["stage4", "stage3", "stage2"],
+            in_channel_list=[128, 64, 32],
+            stride_list=[32, 16, 8],
+            head_stride=8,
+            head_width=32,
+            head_depth=1,
+            expand_ratio=4,
+            middle_op="mbconv",
+            final_expand=2,
+            n_classes=30,
+            **build_kwargs_from_config(kwargs, SegHead),
+        )
     else:
         raise NotImplementedError
     model = EfficientViTSeg(backbone, head)

@@ -1,5 +1,6 @@
 from typing import Any, Optional, Dict, List
 import os
+import json
 from PIL import Image
 import numpy as np
 import random
@@ -12,6 +13,28 @@ from torch.utils.data import Dataset
 from efficientvit.apps.data_provider import DataProvider
 
 __all__ = ["SegDataProvider"]
+
+class RemapClasses:
+    """
+    레이블(마스크)의 클래스 ID를 새로운 매핑 규칙에 따라 변경하는 변환 클래스.
+    """
+    def __init__(self, mapping_dict: Dict[int, int]):
+        self.mapping_dict = mapping_dict
+
+    def __call__(self, sample: Dict[str, Any]) -> Dict[str, Any]:
+        label_img = sample['label']
+        label_array = np.array(label_img)
+        new_label_array = label_array.copy()
+        for old_class, new_class in self.mapping_dict.items():
+            new_label_array[label_array == old_class] = new_class
+        
+        # 디버깅 코드 추가: 변환 후 고유 값 확인
+        unique_values = np.unique(new_label_array)
+        if any(val > 29 and val != 255 for val in unique_values):
+            print(f"[DEBUG] 문제가 될 수 있는 값 발견! 고유 값: {unique_values}")
+
+        sample['label'] = Image.fromarray(new_label_array, mode=label_img.mode)
+        return sample
 
 # 세그멘테이션을 위한 커스텀 변환 클래스들
 class SegCompose:
@@ -112,6 +135,8 @@ class SegmentationDataset(Dataset):
         lbl_path = self.labels[idx]
         
         image = Image.open(img_path).convert('RGB')
+        # 여기 부분이 핵심!
+        # 여길 수정해서 라벨 형식을 다르게 수정할 수 있을 것으로 보임.
         label = Image.open(lbl_path)
 
         sample = {'image': image, 'label': label}
@@ -143,6 +168,7 @@ class SegDataProvider(DataProvider):
         label_suffix: str = ".png",
         train_split: str = "train",
         val_split: str = "val",
+        class_mapping_path: Optional[str] = None, # 경로 파라미터 추가
     ):
         self.data_dir = data_dir
         self.n_classes = n_classes
@@ -152,6 +178,12 @@ class SegDataProvider(DataProvider):
         self.label_suffix = label_suffix
         self.train_split = train_split
         self.val_split = val_split
+
+        # 클래스 매핑 로드
+        self.class_mapping = None
+        if class_mapping_path:
+            with open(class_mapping_path, 'r') as f:
+                self.class_mapping = {int(k): v for k, v in json.load(f).items()}
 
         super().__init__(
             train_batch_size,
@@ -168,24 +200,32 @@ class SegDataProvider(DataProvider):
     def build_train_transform(self, image_size: Optional[tuple[int, int]] = None) -> Any:
         image_size = self.image_size if image_size is None else image_size
         
-        train_transforms = [
+        train_transforms = []
+        if self.class_mapping:
+            train_transforms.append(RemapClasses(self.class_mapping))
+
+        train_transforms.extend([
             SegRandomResizedCrop(image_size[0], scale=(0.5, 2.0)),
             SegRandomHorizontalFlip(),
             SegToTensor(),
             SegNormalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-        ]
+        ])
         return SegCompose(train_transforms)
 
     def build_valid_transform(self, image_size: Optional[tuple[int, int]] = None) -> Any:
         image_size = (self.active_image_size if image_size is None else image_size)[0]
-        return SegCompose(
-            [
-                SegResize(image_size),
-                SegCenterCrop(image_size),
-                SegToTensor(),
-                SegNormalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-            ]
-        )
+        
+        valid_transforms = []
+        if self.class_mapping:
+            valid_transforms.append(RemapClasses(self.class_mapping))
+
+        valid_transforms.extend([
+            SegResize(image_size),
+            SegCenterCrop(image_size),
+            SegToTensor(),
+            SegNormalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        ])
+        return SegCompose(valid_transforms)
 
     def build_datasets(self) -> tuple[Any, Any, Any]:
         train_transform = self.build_train_transform()

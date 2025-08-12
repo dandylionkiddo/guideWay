@@ -81,6 +81,11 @@ REGISTERED_EFFICIENTVIT_SEG_MODEL: dict[str, tuple[Callable, float, str]] = {
         1e-5,
         "assets/checkpoints/efficientvit_seg/efficientvit_seg_b0_cityscapes.pt",
     ),
+    "efficientvit-seg-b0-mapillary-30": (
+        partial(efficientvit_seg_b0, dataset="mapillary-30"),
+        1e-5,
+        "assets/checkpoints/efficientvit_seg/efficientvit_seg_b0_cityscapes.pt",
+    ),
 }
 
 
