@@ -119,24 +119,29 @@ class DataProvider:
             dataloader_class = RRSDataLoader
         else:
             dataloader_class = torch.utils.data.DataLoader
+
+        # 공통 옵션
+        common = dict(
+            dataset=dataset,
+            batch_size=batch_size,
+            num_workers=n_worker,
+            pin_memory=True,
+            pin_memory_device="cuda",        # PyTorch 2.x
+            persistent_workers=True,         # 워커 생존
+            prefetch_factor=4,               # 워커당 프리패치
+            drop_last=drop_last,
+        )
+
         if self.num_replicas is None:
             return dataloader_class(
-                dataset=dataset,
-                batch_size=batch_size,
-                shuffle=True,
-                num_workers=n_worker,
-                pin_memory=True,
-                drop_last=drop_last,
+                shuffle=train,               # 검증/테스트는 False
+                **common,
             )
         else:
             sampler = DistributedSampler(dataset, self.num_replicas, self.rank)
             return dataloader_class(
-                dataset=dataset,
-                batch_size=batch_size,
                 sampler=sampler,
-                num_workers=n_worker,
-                pin_memory=True,
-                drop_last=drop_last,
+                **common,
             )
 
     def set_epoch(self, epoch: int) -> None:

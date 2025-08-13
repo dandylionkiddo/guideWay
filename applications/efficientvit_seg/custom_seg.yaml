@@ -6,7 +6,7 @@ model:
 data_provider:
   task: seg
   dataset: mapillary 
-  data_dir: D:\AIffel\EfficientViT\data\mapillary-vistas-dataset_public_v2.0\demo_training
+  data_dir: D:\AIffel\EfficientViT\data\mapillary-vistas-dataset_public_v2.0 # \demo_training
   n_classes: 30 # 새로운 클래스 수
   class_mapping_path: D:\AIffel\EfficientViT\efficientvit\applications\efficientvit_seg\custom_class_mapping.json # 클래스 매핑 파일 경로
 
@@ -19,8 +19,8 @@ data_provider:
   label_suffix: .png
 
   # 데이터로더 설정
-  base_batch_size: 16
-  test_batch_size: 16
+  base_batch_size: 64
+  test_batch_size: 64
   n_worker: 8
   image_size: 512
 

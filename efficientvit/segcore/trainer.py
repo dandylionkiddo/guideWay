@@ -55,6 +55,13 @@ class SegTrainer(Trainer):
         # 데이터셋의 클래스 수를 data_provider에서 가져옵니다.
         self.n_classes = data_provider.n_classes
 
+    def before_step(self, sample: dict[str, Any]) -> dict[str, Any]:
+        img: torch.Tensor = sample["image"]
+        lbl: torch.Tensor = sample["label"]
+        img = img.to("cuda", non_blocking=True, memory_format=torch.channels_last)
+        lbl = lbl.to("cuda", non_blocking=True)
+        return {"image": img, "label": lbl}
+
     def _validate(self, model, data_loader, epoch) -> dict[str, Any]:
         """검증 데이터셋으로 모델 성능을 평가합니다."""
         val_loss = AverageMeter() # 손실 평균을 계산하기 위한 객체
@@ -69,8 +76,9 @@ class SegTrainer(Trainer):
                 file=sys.stdout,
             ) as t:
                 for sample in data_loader:
-                    images = sample['image'].cuda()
-                    labels = sample['label'].cuda()
+                    feed_dict = self.before_step(sample)
+                    images = feed_dict["image"]
+                    labels = feed_dict["label"]
 
                     # 모델 예측
                     output = model(images)
@@ -109,8 +117,8 @@ class SegTrainer(Trainer):
 
     def run_step(self, feed_dict: dict[str, Any]) -> dict[str, Any]:
         """단일 학습 스텝(배치)을 실행합니다."""
-        images = feed_dict['image'].cuda()
-        labels = feed_dict['label'].cuda()
+        images = feed_dict['image']
+        labels = feed_dict['label']
 
         # Automatic Mixed Precision (AMP) 활성화
         with torch.autocast(device_type="cuda", dtype=self.amp_dtype, enabled=self.enable_amp):
@@ -134,7 +142,8 @@ class SegTrainer(Trainer):
         ) as t:
             for sample in self.data_provider.train:
                 self.optimizer.zero_grad() # 그래디언트 초기화
-                output_dict = self.run_step(sample) # 학습 스텝 실행
+                feed_dict = self.before_step(sample)
+                output_dict = self.run_step(feed_dict) # 학습 스텝 실행
                 self.after_step() # 옵티마이저 및 스케줄러 업데이트
 
                 train_loss.update(output_dict["loss"].item(), sample['image'].size(0))
