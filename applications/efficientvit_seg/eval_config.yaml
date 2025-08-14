@@ -1,0 +1,35 @@
+# 실행 환경 설정
+runtime:
+  gpu: "0"
+  workers: 4
+
+# 데이터셋 설정
+dataset:
+  name: mapillary # 평가할 데이터셋 이름 [cityscapes, ade20k, mapillary]
+  path: "D:/AIffel/EfficientViT/data/mapillary-vistas-dataset_public_v2.0/validation" # 데이터셋 경로 (실제 경로로 수정 필요)
+  crop_size: 512 # ADE20K, Mapillary는 정사각형, Cityscapes는 2:1 비율로 자동 조정
+  batch_size: 1
+  
+  # 커스텀 클래스 매핑을 사용하려면 아래 주석을 해제하고 파일 경로를 지정하세요.
+  class_mapping_file: "applications/efficientvit_seg/custom_class_mapping.json"
+  class_definitions_file: "applications/efficientvit_seg/custom_class_definitions.json"
+
+# 모델 설정
+model:
+  name: "efficientvit-seg-b0-mapillary-30" # 평가할 모델 이름
+  # weight_url: "efficientvit/assets/checkpoints/efficientvit_seg/efficientvit_seg_b0_cityscapes.pt" # 예시: Cityscapes로 사전 학습된 모델
+  weight_url: "D:/AIffel/EfficientViT/efficientvit/output/from_runpod/model_best.pt" # 실제 학습된 모델 가중치 경로로 수정 필요
+
+# 평가 결과 저장 경로
+save_path: "./output/eval_results"
+
+# 저장 옵션
+saving:
+  # 저장할 이미지 비율 (0.0 ~ 1.0). 1.0 또는 항목이 없으면 모두 저장.
+  image_sample_ratio: 0.0
+
+# 평가 항목 설정 (원하는 항목만 남기거나 주석 처리)
+evaluation_tasks:
+  - calculate_fps
+  - calculate_miou
+  - save_images

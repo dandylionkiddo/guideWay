@@ -1048,7 +1048,7 @@ def main():
                             canvas.save(os.path.join(args.save_path, f"{idx}.png"))
                             fout.write(f"{idx}:\t{image_path}\n")
 
-    print(f"mIoU = {(interaction.sum / union.sum).cpu().mean().item() * 100:.3f}")
+    # print(f"mIoU = {(interaction.sum / union.sum).cpu().mean().item() * 100:.3f}")
 
 
 if __name__ == "__main__":
