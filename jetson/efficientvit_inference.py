@@ -13,10 +13,17 @@ import subprocess
 import os
 import colorsys
 
-# EfficientViT 관련 임포트
-import sys
-sys.path.append('.')
+# 작업 디렉토리를 부모 폴더(guideWay)로 변경 
+import sys 
+script_dir = os.path.dirname(os.path.abspath(__file__)) # jetson 폴더 
+parent_dir = os.path.dirname(script_dir) # guideWay 폴더 
+os.chdir(parent_dir) # 작업 디렉토리를 guideWay로 변경 
+print(f"Working directory changed to: {os.getcwd()}") 
 
+# sys.path는 이미 상위 폴더를 포함하도록 설정 
+sys.path.insert(0, parent_dir) 
+
+# 이제 efficientvit를 바로 import 가능
 from efficientvit.models.efficientvit.seg import EfficientViTSeg
 import torchvision.transforms as transforms
 
