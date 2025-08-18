@@ -286,16 +286,36 @@ def create_data_loader(dataset: Dataset, config: dict) -> DataLoader:
 
 
 class RemapClasses:
-    def __init__(self, mapping_dict: Dict[int, int]):
+    def __init__(self, mapping_dict: Dict[int, int], ignore_index: int = 255):
         self.mapping_dict = mapping_dict
+        self.ignore_index = ignore_index
+        
+        # Create a lookup table for fast remapping
+        if not self.mapping_dict:
+            self.remap_lut = None
+            return
+            
+        max_old_id = max(self.mapping_dict.keys())
+        self.remap_lut = np.full(max_old_id + 1, self.ignore_index, dtype=np.int64)
+        for old_val, new_val in self.mapping_dict.items():
+            self.remap_lut[old_val] = new_val
 
     def __call__(self, sample: Dict[str, Any]) -> Dict[str, Any]:
+        if self.remap_lut is None:
+            return sample
+            
         label_img = sample['label']
-        label_array = np.array(label_img)
-        new_label_array = label_array.copy()
-        for old_class, new_class in self.mapping_dict.items():
-            new_label_array[label_array == old_class] = new_class
-        sample['label'] = Image.fromarray(new_label_array, mode=label_img.mode)
+        label_array = np.array(label_img, dtype=np.int64)
+        
+        # Ensure mask values are within the LUT's bounds, otherwise map to ignore_index
+        max_lut_idx = len(self.remap_lut) - 1
+        # Pixels with values greater than the max known ID are mapped to ignore_index
+        label_array[label_array > max_lut_idx] = self.ignore_index
+        
+        # Apply the remapping using the lookup table
+        new_label_array = self.remap_lut[label_array]
+        
+        sample['label'] = Image.fromarray(new_label_array.astype(np.uint8), mode=label_img.mode)
         return sample
 
 class SegCompose:

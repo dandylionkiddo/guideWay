@@ -121,6 +121,7 @@ def efficientvit_seg_b0(dataset: str, **kwargs) -> EfficientViTSeg:
     from efficientvit.models.efficientvit.backbone import efficientvit_backbone_b0
 
     backbone = efficientvit_backbone_b0(**kwargs)
+    custom_n_classes = kwargs.pop("n_classes", None)
 
     if dataset == "cityscapes":
         head = SegHead(
@@ -133,7 +134,7 @@ def efficientvit_seg_b0(dataset: str, **kwargs) -> EfficientViTSeg:
             expand_ratio=4,
             middle_op="mbconv",
             final_expand=4,
-            n_classes=19,
+            n_classes=19 if custom_n_classes is None else custom_n_classes,
             **build_kwargs_from_config(kwargs, SegHead),
         )
     elif dataset == "mapillary":
@@ -146,22 +147,8 @@ def efficientvit_seg_b0(dataset: str, **kwargs) -> EfficientViTSeg:
             head_depth=1,
             expand_ratio=4,
             middle_op="mbconv",
-            final_expand=2,
-            n_classes=124,
-            **build_kwargs_from_config(kwargs, SegHead),
-        )
-    elif dataset == "mapillary-30":
-        head = SegHead(
-            fid_list=["stage4", "stage3", "stage2"],
-            in_channel_list=[128, 64, 32],
-            stride_list=[32, 16, 8],
-            head_stride=8,
-            head_width=32,
-            head_depth=1,
-            expand_ratio=4,
-            middle_op="mbconv",
-            final_expand=2,
-            n_classes=30,
+            final_expand=4,
+            n_classes=124 if custom_n_classes is None else custom_n_classes,
             **build_kwargs_from_config(kwargs, SegHead),
         )
     else:
@@ -174,6 +161,7 @@ def efficientvit_seg_b1(dataset: str, **kwargs) -> EfficientViTSeg:
     from efficientvit.models.efficientvit.backbone import efficientvit_backbone_b1
 
     backbone = efficientvit_backbone_b1(**kwargs)
+    custom_n_classes = kwargs.pop("n_classes", None)
 
     if dataset == "cityscapes":
         head = SegHead(
@@ -186,7 +174,7 @@ def efficientvit_seg_b1(dataset: str, **kwargs) -> EfficientViTSeg:
             expand_ratio=4,
             middle_op="mbconv",
             final_expand=4,
-            n_classes=19,
+            n_classes=19 if custom_n_classes is None else custom_n_classes,
             **build_kwargs_from_config(kwargs, SegHead),
         )
     elif dataset == "ade20k":
@@ -200,7 +188,7 @@ def efficientvit_seg_b1(dataset: str, **kwargs) -> EfficientViTSeg:
             expand_ratio=4,
             middle_op="mbconv",
             final_expand=None,
-            n_classes=150,
+            n_classes=150 if custom_n_classes is None else custom_n_classes,
             **build_kwargs_from_config(kwargs, SegHead),
         )
     else:
@@ -213,6 +201,7 @@ def efficientvit_seg_b2(dataset: str, **kwargs) -> EfficientViTSeg:
     from efficientvit.models.efficientvit.backbone import efficientvit_backbone_b2
 
     backbone = efficientvit_backbone_b2(**kwargs)
+    custom_n_classes = kwargs.pop("n_classes", None)
 
     if dataset == "cityscapes":
         head = SegHead(
@@ -225,7 +214,7 @@ def efficientvit_seg_b2(dataset: str, **kwargs) -> EfficientViTSeg:
             expand_ratio=4,
             middle_op="mbconv",
             final_expand=4,
-            n_classes=19,
+            n_classes=19 if custom_n_classes is None else custom_n_classes,
             **build_kwargs_from_config(kwargs, SegHead),
         )
     elif dataset == "ade20k":
@@ -239,7 +228,7 @@ def efficientvit_seg_b2(dataset: str, **kwargs) -> EfficientViTSeg:
             expand_ratio=4,
             middle_op="mbconv",
             final_expand=None,
-            n_classes=150,
+            n_classes=150 if custom_n_classes is None else custom_n_classes,
             **build_kwargs_from_config(kwargs, SegHead),
         )
     else:
@@ -252,6 +241,7 @@ def efficientvit_seg_b3(dataset: str, **kwargs) -> EfficientViTSeg:
     from efficientvit.models.efficientvit.backbone import efficientvit_backbone_b3
 
     backbone = efficientvit_backbone_b3(**kwargs)
+    custom_n_classes = kwargs.pop("n_classes", None)
 
     if dataset == "cityscapes":
         head = SegHead(
@@ -264,7 +254,7 @@ def efficientvit_seg_b3(dataset: str, **kwargs) -> EfficientViTSeg:
             expand_ratio=4,
             middle_op="mbconv",
             final_expand=4,
-            n_classes=19,
+            n_classes=19 if custom_n_classes is None else custom_n_classes,
             **build_kwargs_from_config(kwargs, SegHead),
         )
     elif dataset == "ade20k":
@@ -278,7 +268,7 @@ def efficientvit_seg_b3(dataset: str, **kwargs) -> EfficientViTSeg:
             expand_ratio=4,
             middle_op="mbconv",
             final_expand=None,
-            n_classes=150,
+            n_classes=150 if custom_n_classes is None else custom_n_classes,
             **build_kwargs_from_config(kwargs, SegHead),
         )
     else:
@@ -291,6 +281,7 @@ def efficientvit_seg_l1(dataset: str, **kwargs) -> EfficientViTSeg:
     from efficientvit.models.efficientvit.backbone import efficientvit_backbone_l1
 
     backbone = efficientvit_backbone_l1(**kwargs)
+    custom_n_classes = kwargs.pop("n_classes", None)
 
     if dataset == "cityscapes":
         head = SegHead(
@@ -303,7 +294,7 @@ def efficientvit_seg_l1(dataset: str, **kwargs) -> EfficientViTSeg:
             expand_ratio=1,
             middle_op="fmbconv",
             final_expand=None,
-            n_classes=19,
+            n_classes=19 if custom_n_classes is None else custom_n_classes,
             act_func="gelu",
             **build_kwargs_from_config(kwargs, SegHead),
         )
@@ -318,7 +309,7 @@ def efficientvit_seg_l1(dataset: str, **kwargs) -> EfficientViTSeg:
             expand_ratio=4,
             middle_op="fmbconv",
             final_expand=8,
-            n_classes=150,
+            n_classes=150 if custom_n_classes is None else custom_n_classes,
             act_func="gelu",
             **build_kwargs_from_config(kwargs, SegHead),
         )
@@ -332,6 +323,7 @@ def efficientvit_seg_l2(dataset: str, **kwargs) -> EfficientViTSeg:
     from efficientvit.models.efficientvit.backbone import efficientvit_backbone_l2
 
     backbone = efficientvit_backbone_l2(**kwargs)
+    custom_n_classes = kwargs.pop("n_classes", None)
 
     if dataset == "cityscapes":
         head = SegHead(
@@ -344,7 +336,7 @@ def efficientvit_seg_l2(dataset: str, **kwargs) -> EfficientViTSeg:
             expand_ratio=1,
             middle_op="fmbconv",
             final_expand=None,
-            n_classes=19,
+            n_classes=19 if custom_n_classes is None else custom_n_classes,
             act_func="gelu",
             **build_kwargs_from_config(kwargs, SegHead),
         )
@@ -359,7 +351,7 @@ def efficientvit_seg_l2(dataset: str, **kwargs) -> EfficientViTSeg:
             expand_ratio=4,
             middle_op="fmbconv",
             final_expand=8,
-            n_classes=150,
+            n_classes=150 if custom_n_classes is None else custom_n_classes,
             act_func="gelu",
             **build_kwargs_from_config(kwargs, SegHead),
         )

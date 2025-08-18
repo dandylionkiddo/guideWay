@@ -44,13 +44,17 @@ def main():
 
     # 설정 파일에서 사용할 모델의 이름을 가져옵니다.
     model_name = exp_config["model"]["name"]
-    # 딕셔너리에서 이름에 맞는 모델 생성 함수를 찾습니다.
-    # model_func = ALL_SEG_MODELS[model_name]
+    # 데이터 프로바이더로부터 n_classes와 dataset 이름을 가져옵니다.
+    n_classes = exp_config.get("data_provider", {}).get("n_classes")
+    dataset_name = exp_config.get("data_provider", {}).get("dataset")
 
     # 데이터 프로바이더로부터 데이터셋 이름을 받아와 모델을 생성합니다.
-    # 클래스 수(n_classes)와 같은 세부 설정은 이제 `seg.py`의 모델 함수가 알아서 처리합니다.
-    # model = model_func(dataset=exp_config["data_provider"]["dataset"])
-    model = create_efficientvit_seg_model(model_name, False)
+    model = create_efficientvit_seg_model(
+        model_name,
+        dataset=dataset_name,
+        pretrained=False,
+        n_classes=n_classes,
+    )
     
     # 설정 파일의 `model_init` 섹션을 `init_model` 함수의 인자로 전달합니다.
     # `**`는 딕셔너리를 키워드 인자로 풀어주는 역할을 합니다.

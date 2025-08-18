@@ -1,13 +1,13 @@
 # model
 model:
-  name: efficientvit-seg-b0-cityscapes # 모델 이름은 그대로 사용 (num_classes는 train.py에서 전달)
+  name: efficientvit-seg-b0 # 모델 이름은 그대로 사용 (num_classes는 train.py에서 전달)
 
 # data provider
 data_provider:
   task: seg
   dataset: mapillary 
   data_dir: D:\AIffel\EfficientViT\data\mapillary-vistas-dataset_public_v2.0 # \demo_training
-  n_classes: 19 # 새로운 클래스 수
+  n_classes: 18 # 새로운 클래스 수
   class_mapping_path: D:\AIffel\EfficientViT\efficientvit\applications\efficientvit_seg\custom_class_mapping.json # 클래스 매핑 파일 경로
 
   # SegDataProvider가 데이터셋 구조를 파악하는 데 사용하는 정보
@@ -51,4 +51,4 @@ model_init:
   rand_init: trunc_normal
   last_gamma: 0.0
   # 사전 학습된 가중치를 사용하되, head 부분은 랜덤 초기화되므로 finetuning과 유사하게 동작
-  backbone_init_from: D:\AIffel\EfficientViT\efficientvit\assets\checkpoints\efficientvit_seg\efficientvit_seg_b0_cityscapes.pt
+  backbone_init_from: D:\AIffel\EfficientViT\efficientvit\efficientvit\assets\checkpoints\efficientvit_seg\efficientvit_seg_b0_cityscapes.pt
