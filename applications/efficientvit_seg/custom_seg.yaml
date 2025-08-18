@@ -1,13 +1,13 @@
 # model
 model:
-  name: efficientvit-seg-b0-mapillary-30 # 모델 이름은 그대로 사용 (num_classes는 train.py에서 전달)
+  name: efficientvit-seg-b0-cityscapes # 모델 이름은 그대로 사용 (num_classes는 train.py에서 전달)
 
 # data provider
 data_provider:
   task: seg
   dataset: mapillary 
   data_dir: D:\AIffel\EfficientViT\data\mapillary-vistas-dataset_public_v2.0 # \demo_training
-  n_classes: 30 # 새로운 클래스 수
+  n_classes: 19 # 새로운 클래스 수
   class_mapping_path: D:\AIffel\EfficientViT\efficientvit\applications\efficientvit_seg\custom_class_mapping.json # 클래스 매핑 파일 경로
 
   # SegDataProvider가 데이터셋 구조를 파악하는 데 사용하는 정보
@@ -26,7 +26,7 @@ data_provider:
 
 # run config (필요에 따라 조절)
 run_config:
-  n_epochs: 3
+  n_epochs: 500
   base_lr: 0.001
   warmup_epochs: 10
   warmup_lr: 0.0
@@ -43,6 +43,8 @@ run_config:
   reset_bn_size: 0
   reset_bn_batch_size: 0
   eval_image_size: [512]
+  early_stopping_patience: 10
+  early_stopping_metric: val_miou 
 
 # model init
 model_init:

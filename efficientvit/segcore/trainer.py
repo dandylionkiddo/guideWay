@@ -167,13 +167,31 @@ class SegTrainer(Trainer):
 
     def train(self) -> None:
         """전체 학습 과정을 관리하고 실행합니다."""
+        # Early stopping 설정
+        early_stopping_patience = getattr(self.run_config, 'early_stopping_patience', 0)
+        early_stopping_metric = getattr(self.run_config, 'early_stopping_metric', 'val_miou')
+        early_stopping_counter = 0
+        
+        if early_stopping_metric == 'val_miou':
+            best_val_for_early_stopping = self.best_val
+            is_better = lambda current, best: current > best
+        elif early_stopping_metric == 'val_loss':
+            best_val_for_early_stopping = float('inf')
+            is_better = lambda current, best: current < best
+        else:
+            # 지원하지 않는 메트릭이면 early stopping 비활성화
+            early_stopping_patience = 0
+
+        if early_stopping_patience > 0 and is_master():
+            self.write_log(f"Early stopping enabled: patience={early_stopping_patience}, metric='{early_stopping_metric}'")
+
         for epoch in range(self.start_epoch, self.run_config.n_epochs):
             self.data_provider.set_epoch(epoch)
             self.train_one_epoch(epoch)
             val_info_dict = self.validate(epoch=epoch, is_test=False)
             self.write_log(f"Epoch {epoch + 1} Validation: Loss={val_info_dict['val_loss']:.4f}, mIoU={val_info_dict['val_miou']:.4f}", prefix="valid")
 
-            # 최고의 성능을 보인 모델을 저장합니다.
+            # 최고의 성능을 보인 모델을 저장합니다. (기존 로직)
             is_best = val_info_dict["val_miou"] > self.best_val
             self.best_val = max(val_info_dict["val_miou"], self.best_val)
 
@@ -182,3 +200,25 @@ class SegTrainer(Trainer):
                 epoch=epoch,
                 model_name="model_best.pt" if is_best else "checkpoint.pt",
             )
+
+            # Early stopping 로직
+            if early_stopping_patience > 0:
+                current_metric_val = val_info_dict[early_stopping_metric]
+                if is_better(current_metric_val, best_val_for_early_stopping):
+                    best_val_for_early_stopping = current_metric_val
+                    early_stopping_counter = 0
+                    if is_master():
+                        self.write_log(f"Early stopping metric '{early_stopping_metric}' improved to {best_val_for_early_stopping:.4f}.", prefix="valid")
+                else:
+                    early_stopping_counter += 1
+                    if is_master():
+                        self.write_log(
+                            f"Early stopping counter: {early_stopping_counter}/{early_stopping_patience}. "
+                            f"Metric '{early_stopping_metric}' did not improve from {best_val_for_early_stopping:.4f}.",
+                            prefix="valid"
+                        )
+                
+                if early_stopping_counter >= early_stopping_patience:
+                    if is_master():
+                        self.write_log(f"Early stopping triggered after {epoch + 1} epochs.", prefix="valid")
+                    break
