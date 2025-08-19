@@ -11,14 +11,15 @@ dataset:
   batch_size: 1
   
   # 커스텀 클래스 매핑을 사용하려면 아래 주석을 해제하고 파일 경로를 지정하세요.
-  class_mapping_file: "applications/efficientvit_seg/custom_class_mapping.json"
+  class_mapping_file: "applications/efficientvit_seg/custom_class_mapping_copy.json"
   class_definitions_file: "applications/efficientvit_seg/custom_class_definitions.json"
 
 # 모델 설정
 model:
-  name: "efficientvit-seg-b0-mapillary-30" # 평가할 모델 이름
+  name: "efficientvit-seg-b0" # 평가할 모델 이름
+  n_classes: 18
   # weight_url: "efficientvit/assets/checkpoints/efficientvit_seg/efficientvit_seg_b0_cityscapes.pt" # 예시: Cityscapes로 사전 학습된 모델
-  weight_url: "D:/AIffel/EfficientViT/efficientvit/output/from_runpod/model_best.pt" # 실제 학습된 모델 가중치 경로로 수정 필요
+  weight_url: "D:/AIffel/EfficientViT/efficientvit/output/from_runpod/model_best(1).pt" # 실제 학습된 모델 가중치 경로로 수정 필요
 
 # 평가 결과 저장 경로
 save_path: "./output/eval_results"

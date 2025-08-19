@@ -31,7 +31,10 @@ def main():
 
     # Create model
     model = create_efficientvit_seg_model(
-        config["model"]["name"], weight_url=config["model"]["weight_url"]
+        config["model"]["name"],
+        config["dataset"]["name"],
+        weight_url=config["model"]["weight_url"],
+        n_classes=config["model"]["n_classes"]
     )
     model = torch.nn.DataParallel(model).cuda()
     model.eval()
