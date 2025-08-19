@@ -1,5 +1,8 @@
 
 import argparse
+import os
+import shutil
+
 import torch
 
 # EfficientViT 관련 유틸리티 및 클래스 임포트
@@ -66,6 +69,11 @@ def main():
         model=model,
         data_provider=data_provider,
     )
+
+    # 설정 파일(.yaml)을 결과 폴더에 복사
+    os.makedirs(args.path, exist_ok=True)
+    shutil.copy(args.config, os.path.join(args.path, "config.yaml"))
+    print(f"Copied config file to {os.path.join(args.path, 'config.yaml')}")
 
     # 학습 준비 및 시작
     trainer.prep_for_training(run_config, ema_decay=0.9998, amp="fp16")
