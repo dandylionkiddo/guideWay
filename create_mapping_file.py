@@ -12,8 +12,8 @@ new_class_names = [
 ]
 
 # Create a mapping from new class name to new ID (0-17 for main classes, 255 for background)
-new_name_to_id = {name: i for i, name in enumerate(new_class_names) if name != 'background'}
-new_name_to_id['background'] = 255
+new_name_to_id = {name: i for i, name in enumerate(new_class_names)} # if name != 'background'}
+# new_name_to_id['background'] = 255
 
 class_mapping = {}
 
