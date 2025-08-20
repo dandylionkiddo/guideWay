@@ -1,3 +1,9 @@
+"""
+이 파일은 "모델 동물원(Model Zoo)" 역할을 합니다.
+사전 정의된 EfficientViT 세그멘테이션 모델들을 등록하고, 사용자가 모델 이름만으로
+쉽게 모델 인스턴스를 생성하고 사전 학습된 가중치까지 로드할 수 있도록
+`create_efficientvit_seg_model` 팩토리 함수를 제공합니다.
+"""
 from typing import Callable, Optional
 
 from efficientvit.models.efficientvit import (
@@ -15,6 +21,12 @@ from efficientvit.models.utils import load_state_dict_from_file
 __all__ = ["create_efficientvit_seg_model"]
 
 
+# 등록된 EfficientViT 세그멘테이션 모델 정보를 담고 있는 딕셔너리입니다.
+# 각 키는 모델의 이름(예: "efficientvit-seg-b0")이며,
+# 값은 다음 정보를 담은 튜플입니다:
+# 1. 모델 생성 함수 (예: `efficientvit_seg_b0`)
+# 2. 정규화(Normalization) 레이어의 epsilon 값
+# 3. 기본으로 제공되는 사전 학습된 가중치 파일의 경로
 REGISTERED_EFFICIENTVIT_SEG_MODEL: dict[str, tuple[Callable, float, str]] = {
     "efficientvit-seg-b0": (
         efficientvit_seg_b0,
@@ -53,24 +65,47 @@ REGISTERED_EFFICIENTVIT_SEG_MODEL: dict[str, tuple[Callable, float, str]] = {
 def create_efficientvit_seg_model(
     name: str,
     dataset: str,
-    pretrained=True,
+    pretrained: bool = True,
     weight_url: Optional[str] = None,
     n_classes: Optional[int] = None,
     **kwargs,
 ) -> EfficientViTSeg:
+    """
+    이름으로 EfficientViT 세그멘테이션 모델을 생성하고, 선택적으로 사전 학습된 가중치를 로드합니다.
+
+    Args:
+        name (str): 생성할 모델의 이름 (예: "efficientvit-seg-b0").
+                      `REGISTERED_EFFICIENTVIT_SEG_MODEL`에 등록된 키여야 합니다.
+        dataset (str): 모델 헤드를 구성하는 데 사용될 데이터셋 이름 (예: "cityscapes").
+        pretrained (bool, optional): `True`이면 사전 학습된 가중치를 로드합니다. Defaults to True.
+        weight_url (Optional[str], optional): 사용할 가중치 파일의 경로.
+                                              `None`이면 등록된 기본 경로를 사용합니다. Defaults to None.
+        n_classes (Optional[int], optional): 출력 클래스의 수. `None`이면 데이터셋의 기본값을 따릅니다. Defaults to None.
+        **kwargs: 모델 생성 함수에 전달될 추가 인자.
+
+    Returns:
+        EfficientViTSeg: 생성되고 가중치가 로드된 모델 객체.
+    """
     if name not in REGISTERED_EFFICIENTVIT_SEG_MODEL:
         raise ValueError(f"Cannot find {name} in the model zoo. List of models: {list(REGISTERED_EFFICIENTVIT_SEG_MODEL.keys())}")
-    else:
-        model_cls, norm_eps, default_pt = REGISTERED_EFFICIENTVIT_SEG_MODEL[name]
-        model = model_cls(dataset=dataset, n_classes=n_classes, **kwargs)
-        set_norm_eps(model, norm_eps)
-        weight_url = default_pt if weight_url is None else weight_url
 
+    # 1. 등록된 정보에서 모델 생성 함수, norm_eps, 기본 가중치 경로를 가져옵니다.
+    model_builder, norm_eps, default_pt_path = REGISTERED_EFFICIENTVIT_SEG_MODEL[name]
+
+    # 2. 모델 생성 함수를 호출하여 모델 아키텍처를 빌드합니다.
+    model = model_builder(dataset=dataset, n_classes=n_classes, **kwargs)
+
+    # 3. 모델의 모든 정규화 레이어의 epsilon 값을 설정합니다.
+    set_norm_eps(model, norm_eps)
+
+    # 4. 사전 학습된 가중치를 로드합니다.
     if pretrained:
-        if weight_url is None:
+        weight_path = weight_url or default_pt_path
+        if weight_path is None:
             raise ValueError(f"Cannot find the pretrained weight of {name}.")
-        else:
-            weight = load_state_dict_from_file(weight_url)
-            model.load_state_dict(weight)
+        
+        state_dict = load_state_dict_from_file(weight_path)
+        model.load_state_dict(state_dict)
+        
     return model
 

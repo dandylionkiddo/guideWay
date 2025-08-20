@@ -1,3 +1,10 @@
+"""
+이 파일은 Semantic Segmentation 태스크를 위한 데이터 처리 파이프라인을 정의합니다.
+- 다양한 데이터셋(Cityscapes, ADE20K, Mapillary 등)을 처리하는 `Dataset` 클래스
+- 데이터 증강(augmentation) 및 변환(transform)을 위한 여러 클래스
+- 최종적으로 데이터로더(DataLoader)를 생성하는 `SegDataProvider` 클래스
+등이 포함되어 있습니다.
+"""
 from typing import Any, Optional, Dict, List
 import os
 import json
@@ -19,7 +26,11 @@ __all__ = ["SegDataProvider", "create_dataset", "create_data_loader"]
 
 
 # region Evaluation-specific Classes (from old eval script)
+# 참고: 이 섹션의 클래스들은 이전 평가 스크립트에서 사용되던 것으로 보이며,
+# 현재의 학습 파이프라인에서는 `SegDataProvider` 내의 변환들을 주로 사용합니다.
+
 class EvalResize:
+    """(평가용) 이미지와 레이블을 주어진 크기로 리사이즈하는 변환 클래스."""
     def __init__(
         self,
         crop_size: Optional[tuple[int, int]],
@@ -54,6 +65,7 @@ class EvalResize:
 
 
 class EvalToTensor:
+    """(평가용) Numpy 배열 형태의 이미지와 레이블을 Torch 텐서로 변환하는 클래스."""
     def __init__(self, mean, std, inplace=False):
         self.mean = mean
         self.std = std
@@ -72,6 +84,11 @@ class EvalToTensor:
 
 
 class CityscapesDataset(Dataset):
+    """
+    Cityscapes 데이터셋을 위한 PyTorch Dataset 클래스.
+
+    데이터셋 경로에서 이미지와 레이블을 로드하고, Cityscapes 전용 레이블 매핑을 적용합니다.
+    """
     classes = (
         "road", "sidewalk", "building", "wall", "fence", "pole", "traffic light",
         "traffic sign", "vegetation", "terrain", "sky", "person", "rider", "car",
@@ -89,6 +106,11 @@ class CityscapesDataset(Dataset):
     )
 
     def __init__(self, data_dir: str, crop_size: Optional[tuple[int, int]] = None):
+        """
+        Args:
+            data_dir (str): Cityscapes 데이터셋의 루트 디렉토리 경로.
+            crop_size (Optional[tuple[int, int]], optional): 리사이즈할 크기. Defaults to None.
+        """
         super().__init__()
         samples = []
         for dirpath, _, fnames in os.walk(data_dir):
@@ -124,10 +146,18 @@ class CityscapesDataset(Dataset):
 
 
 class ADE20KDataset(Dataset):
+    """
+    ADE20K 데이터셋을 위한 PyTorch Dataset 클래스.
+    """
     classes = ("wall", "building", "sky", "floor", "tree", "ceiling", "road", "bed", "windowpane", "grass", "cabinet", "sidewalk", "person", "earth", "door", "table", "mountain", "plant", "curtain", "chair", "car", "water", "painting", "sofa", "shelf", "house", "sea", "mirror", "rug", "field", "armchair", "seat", "fence", "desk", "rock", "wardrobe", "lamp", "bathtub", "railing", "cushion", "base", "box", "column", "signboard", "chest of drawers", "counter", "sand", "sink", "skyscraper", "fireplace", "refrigerator", "grandstand", "path", "stairs", "runway", "case", "pool table", "pillow", "screen door", "stairway", "river", "bridge", "bookcase", "blind", "coffee table", "toilet", "flower", "book", "hill", "bench", "countertop", "stove", "palm", "kitchen island", "computer", "swivel chair", "boat", "bar", "arcade machine", "hovel", "bus", "towel", "light", "truck", "tower", "chandelier", "awning", "streetlight", "booth", "television receiver", "airplane", "dirt track", "apparel", "pole", "land", "bannister", "escalator", "ottoman", "bottle", "buffet", "poster", "stage", "van", "ship", "fountain", "conveyer belt", "canopy", "washer", "plaything", "swimming pool", "stool", "barrel", "basket", "waterfall", "tent", "bag", "minibike", "cradle", "oven", "ball", "food", "step", "tank", "trade name", "microwave", "pot", "animal", "bicycle", "lake", "dishwasher", "screen", "blanket", "sculpture", "hood", "sconce", "vase", "traffic light", "tray", "ashcan", "fan", "pier", "crt screen", "plate", "monitor", "bulletin board", "shower", "radiator", "glass", "clock", "flag")
-    class_colors = ([120, 120, 120], [180, 120, 120], [6, 230, 230], [80, 50, 50], [4, 200, 3], [120, 120, 80], [140, 140, 140], [204, 5, 255], [230, 230, 230], [4, 250, 7], [224, 5, 255], [235, 255, 7], [150, 5, 61], [120, 120, 70], [8, 255, 51], [255, 6, 82], [143, 255, 140], [204, 255, 4], [255, 51, 7], [204, 70, 3], [0, 102, 200], [61, 230, 250], [255, 6, 51], [11, 102, 255], [255, 7, 71], [255, 9, 224], [9, 7, 230], [220, 220, 220], [255, 9, 92], [112, 9, 255], [8, 255, 214], [7, 255, 224], [255, 184, 6], [10, 255, 71], [255, 41, 10], [7, 255, 255], [224, 255, 8], [102, 8, 255], [255, 61, 6], [255, 194, 7], [255, 122, 8], [0, 255, 20], [255, 8, 41], [255, 5, 153], [6, 51, 255], [235, 12, 255], [160, 150, 20], [0, 163, 255], [140, 140, 140], [250, 10, 15], [20, 255, 0], [31, 255, 0], [255, 31, 0], [255, 224, 0], [153, 255, 0], [0, 0, 255], [255, 71, 0], [0, 235, 255], [0, 173, 255], [31, 0, 255], [11, 200, 200], [255, 82, 0], [0, 255, 245], [0, 61, 255], [0, 255, 112], [0, 255, 133], [255, 0, 0], [255, 163, 0], [255, 102, 0], [194, 255, 0], [0, 143, 255], [51, 255, 0], [0, 82, 255], [0, 255, 41], [0, 255, 173], [10, 0, 255], [173, 255, 0], [0, 255, 153], [255, 92, 0], [255, 0, 255], [255, 0, 245], [255, 0, 102], [255, 173, 0], [255, 0, 20], [255, 184, 184], [0, 31, 255], [0, 255, 61], [0, 71, 255], [255, 0, 204], [0, 255, 194], [0, 255, 82], [0, 10, 255], [0, 112, 255], [51, 0, 255], [0, 194, 255], [0, 122, 255], [0, 255, 163], [255, 153, 0], [0, 255, 10], [255, 112, 0], [143, 255, 0], [82, 0, 255], [163, 255, 0], [255, 235, 0], [8, 184, 170], [133, 0, 255], [0, 255, 92], [184, 0, 255], [255, 0, 31], [0, 184, 255], [0, 214, 255], [255, 0, 112], [92, 255, 0], [0, 224, 255], [112, 224, 255], [70, 184, 160], [163, 0, 255], [153, 0, 255], [71, 255, 0], [255, 0, 163], [255, 204, 0], [255, 0, 143], [0, 255, 235], [133, 255, 0], [255, 0, 235], [245, 0, 255], [255, 0, 122], [255, 245, 0], [10, 190, 212], [214, 255, 0], [0, 204, 255], [20, 0, 255], [255, 255, 0], [0, 153, 255], [0, 41, 255], [0, 255, 204], [41, 0, 255], [41, 255, 0], [173, 0, 255], [0, 245, 255], [71, 0, 255], [122, 0, 255], [0, 255, 184], [0, 92, 255], [184, 255, 0], [0, 133, 255], [255, 214, 0], [25, 194, 194], [102, 255, 0], [92, 0, 255])
+    class_colors = ([120, 120, 120], [180, 120, 120], [6, 230, 230], [80, 50, 50], [4, 200, 3], [120, 120, 80], [140, 140, 140], [204, 5, 255], [230, 230, 230], [4, 250, 7], [224, 5, 255], [235, 255, 7], [150, 5, 61], [120, 120, 70], [8, 255, 51], [255, 6, 82], [143, 255, 140], [204, 255, 4], [255, 51, 7], [204, 70, 3], [0, 102, 200], [61, 230, 250], [255, 6, 51], [11, 102, 255], [255, 7, 71], [255, 9, 224], [9, 7, 230], [220, 220, 220], [255, 9, 92], [112, 9, 255], [8, 255, 214], [7, 255, 224], [255, 184, 6], [10, 255, 71], [255, 41, 10], [7, 255, 255], [224, 255, 8], [102, 8, 255], [255, 61, 6], [255, 194, 7], [255, 122, 8], [0, 255, 20], [255, 8, 41], [255, 5, 153], [6, 51, 255], [235, 12, 255], [160, 150, 20], [0, 163, 255], [140, 140, 140], [250, 10, 15], [20, 255, 0], [31, 255, 0], [255, 31, 0], [255, 224, 0], [153, 255, 0], [0, 0, 255], [255, 71, 0], [0, 235, 255], [0, 173, 255], [31, 0, 255], [11, 200, 200], [255, 82, 0], [0, 255, 245], [0, 61, 255], [0, 255, 112], [0, 255, 133], [255, 0, 0], [255, 163, 0], [255, 102, 0], [194, 255, 0], [0, 143, 255], [51, 255, 0], [0, 82, 255], [0, 255, 41], [0, 255, 173], [10, 0, 255], [173, 255, 0], [0, 255, 153], [255, 92, 0], [255, 0, 255], [255, 0, 245], [255, 0, 102], [255, 173, 0], [255, 0, 20], [255, 184, 184], [0, 31, 255], [0, 255, 61], [0, 71, 255], [255, 0, 204], [0, 255, 194], [0, 255, 82], [0, 10, 255], [0, 112, 255], [51, 0, 255], [0, 194, 255], [0, 122, 255], [0, 255, 163], [255, 153, 0], [0, 255, 10], [255, 112, 0], [143, 255, 0], [82, 0, 255], [163, 255, 0], [255, 235, 0], [8, 184, 170], [133, 0, 255], [0, 255, 92], [184, 0, 255], [255, 0, 31], [0, 184, 255], [0, 214, 255], [255, 0, 112], [92, 255, 0], [0, 224, 255], [112, 224, 255], [70, 184, 160], [163, 0, 255], [153, 0, 255], [71, 255, 0], [255, 0, 163], [255, 204, 0], [255, 0, 143], [0, 255, 235], [133, 255, 0], [255, 0, 235], [245, 0, 255], [255, 0, 122], [255, 245, 0], [10, 190, 212], [214, 255, 0], [0, 204, 255], [20, 0, 255], [255, 255, 0], [0, 153, 255], [0, 204, 255], [71, 0, 255], [255, 0, 82], [0, 255, 224], [0, 255, 71], [0, 133, 255], [255, 214, 0], [255, 0, 133], [255, 0, 61], [255, 133, 0], [10, 255, 190], [12, 255, 235], [0, 255, 122], [255, 143, 0], [190, 10, 255], [255, 10, 255], [10, 255, 10], [255, 10, 10], [10, 10, 10])
 
     def __init__(self, data_dir: str, crop_size=512):
+        """
+        Args:
+            data_dir (str): ADE20K 데이터셋의 루트 디렉토리 경로.
+            crop_size (int, optional): 이미지 리사이즈 및 크롭 크기. Defaults to 512.
+        """
         super().__init__()
         self.crop_size = crop_size
         samples = []
@@ -167,8 +197,12 @@ class ADE20KDataset(Dataset):
 
 
 class MapillaryDataset(Dataset):
+    """
+    Mapillary Vistas 데이터셋을 위한 PyTorch Dataset 클래스.
+    커스텀 클래스 정의 및 매핑 파일을 지원하여 유연한 데이터 처리가 가능합니다.
+    """
     # Default classes (124)
-    classes = ("Bird", "Ground Animal", "Ambiguous Barrier", "Concrete Block", "Curb", "Fence", "Guard Rail", "Barrier", "Road Median", "Road Side", "Lane Separator", "Temporary Barrier", "Wall", "Bike Lane", "Crosswalk - Plain", "Curb Cut", "Driveway", "Parking", "Parking Aisle", "Pedestrian Area", "Rail Track", "Road", "Road Shoulder", "Service Lane", "Sidewalk", "Traffic Island", "Bridge", "Building", "Garage", "Tunnel", "Person", "Person Group", "Bicyclist", "Motorcyclist", "Other Rider", "Lane Marking - Dashed Line", "Lane Marking - Straight Line", "Lane Marking - Zigzag Line", "Lane Marking - Ambiguous", "Lane Marking - Arrow (Left)", "Lane Marking - Arrow (Other)", "Lane Marking - Arrow (Right)", "Lane Marking - Arrow (Split Left or Straight)", "Lane Marking - Arrow (Split Right or Straight)", "Lane Marking - Arrow (Straight)", "Lane Marking - Crosswalk", "Lane Marking - Give Way (Row)", "Lane Marking - Give Way (Single)", "Lane Marking - Hatched (Chevron)", "Lane Marking - Hatched (Diagonal)", "Lane Marking - Other", "Lane Marking - Stop Line", "Lane Marking - Symbol (Bicycle)", "Lane Marking - Symbol (Other)", "Lane Marking - Text", "Lane Marking (only) - Dashed Line", "Lane Marking (only) - Crosswalk", "Lane Marking (only) - Other", "Lane Marking (only) - Test", "Mountain", "Sand", "Sky", "Snow", "Terrain", "Vegetation", "Water", "Banner", "Bench", "Bike Rack", "Catch Basin", "CCTV Camera", "Fire Hydrant", "Junction Box", "Mailbox", "Manhole", "Parking Meter", "Phone Booth", "Pothole", "Signage - Advertisement", "Signage - Ambiguous", "Signage - Back", "Signage - Information", "Signage - Other", "Signage - Store", "Street Light", "Pole", "Pole Group", "Traffic Sign Frame", "Utility Pole", "Traffic Cone", "Traffic Light - General (Single)", "Traffic Light - Pedestrians", "Traffic Light - General (Upright)", "Traffic Light - General (Horizontal)", "Traffic Light - Cyclists", "Traffic Light - Other", "Traffic Sign - Ambiguous", "Traffic Sign (Back)", "Traffic Sign - Direction (Back)", "Traffic Sign - Direction (Front)", "Traffic Sign (Front)", "Traffic Sign - Parking", "Traffic Sign - Temporary (Back)", "Traffic Sign - Temporary (Front)", "Trash Can", "Bicycle", "Boat", "Bus", "Car", "Caravan", "Motorcycle", "On Rails", "Other Vehicle", "Trailer", "Truck", "Vehicle Group", "Wheeled Slow", "Water Valve", "Car Mount", "Dynamic", "Ego Vehicle", "Ground", "Static", "Unlabeled")
+    classes = ("Bird", "Ground Animal", "Ambiguous Barrier", "Concrete Block", "Curb", "Fence", "Guard Rail", "Barrier", "Road Median", "Road Side", "Lane Separator", "Temporary Barrier", "Wall", "Bike Lane", "Crosswalk - Plain", "Curb Cut", "Driveway", "Parking", "Parking Aisle", "Pedestrian Area", "Rail Track", "Road", "Road Shoulder", "Service Lane", "Sidewalk", "Traffic Island", "Bridge", "Building", "Garage", "Tunnel", "Person", "Person Group", "Bicyclist", "Motorcyclist", "Other Rider", "Lane Marking - Dashed Line", "Lane Marking - Straight Line", "Lane Marking - Zigzag Line", "Lane Marking - Ambiguous", "Lane Marking - Arrow (Left)", "Lane Marking - Arrow (Other)", "Lane Marking - Arrow (Right)", "Lane Marking - Arrow (Split Left or Straight)", "Lane Marking - Arrow (Split Right or Straight)", "Lane Marking - Arrow (Straight)", "Lane Marking - Crosswalk", "Lane Marking - Give Way (Row)", "Lane Marking - Give Way (Single)", "Lane Marking - Hatched (Chevron)", "Lane Marking - Hatched (Diagonal)", "Lane Marking - Other", "Lane Marking - Stop Line", "Lane Marking - Symbol (Bicycle)", "Lane Marking - Symbol (Other)", "Lane Marking - Text", "Lane Marking (only) - Dashed Line", "Lane Marking (only) - Crosswalk", "Lane Marking (only) - Other", "Lane Marking (only) - Test", "Mountain", "Sand", "Sky", "Snow", "Terrain", "Vegetation", "Water", "Banner", "Bench", "Bike Rack", "Catch Basin", "CCTV Camera", "Fire Hydrant", "Junction Box", "Mailbox", "Manhole", "Parking Meter", "Phone Booth", "Pothole", "Signage - Advertisement", "Signage - Ambiguous", "Signage - Back", "Signage - Information", "Signage - Other", "Signage - Store", "Street Light", "Pole", "Pole Group", "Traffic Sign Frame", "Utility Pole", "Traffic Cone", "Traffic Light - General (Single)", "Traffic Light - Pedestrians", "Traffic Light - General (Upright)", "Traffic Light - General (Horizontal)", "Traffic Light - Cyclists", "Traffic Light - Other", "Traffic Sign - Ambiguous", "Traffic Sign (Back)", "Traffic Sign - Front", "Trash Can", "Bicycle", "Boat", "Bus", "Car", "Caravan", "Motorcycle", "On Rails", "Other Vehicle", "Trailer", "Truck", "Van", "Wheeled Slow", "Watering Can", "Animal", "Person with Other Rider", "Billboard", "Traffic Sign", "Traffic Light", "Support", "Vegetation", "Terrain", "Sky", "Water", "Road", "Sidewalk", "Lane Marking", "Crosswalk", "Building", "Wall", "Fence", "Guard Rail", "Barrier", "Tunnel", "Bridge", "Person with Bicyclist", "Person with Motorcyclist", "Bike Rack", "Parking", "Road Median", "Traffic Island", "Curb", "Curb Cut", "Manhole", "Service Lane", "Bike Lane", "Rail Track", "Pole", "Pole Group", "Utility Pole", "Traffic Sign Frame", "Fire Hydrant", "Mailbox", "Street Light", "Junction Box", "Catch Basin", "CCTV Camera", "Phone Booth", "Pothole", "Parking Meter", "Car Pickup", "Car Sedan", "Car SUV", "Car Hatchback", "Car Van", "Car Other", "Motorcycle", "Bicycle", "Person", "Bicyclist", "Motorcyclist", "Rider", "Other Vehicle", "Truck", "Bus", "Trailer", "Train", "Caravan", "Airplane", "Boat", "On Rails", "Car Other", "Car Pickup", "Car Sedan", "Car SUV", "Car Hatchback", "Car Van", "Car Other", "Motorcycle", "Bicycle", "Person", "Bicyclist", "Motorcyclist", "Rider", "Other Vehicle", "Truck", "Bus", "Trailer", "Train", "Caravan", "Airplane", "Boat", "On Rails", "Car Other")
     class_colors = ([165, 42, 42], [0, 192, 0], [250, 170, 31], [250, 170, 32], [196, 196, 196], [190, 153, 153], [180, 165, 180], [90, 120, 150], [250, 170, 33], [250, 170, 34], [128, 128, 128], [250, 170, 35], [102, 102, 156], [128, 64, 255], [140, 140, 200], [170, 170, 170], [250, 170, 36], [250, 170, 160], [250, 170, 37], [96, 96, 96], [230, 150, 140], [128, 64, 128], [110, 110, 110], [110, 110, 110], [244, 35, 232], [128, 196, 128], [150, 100, 100], [70, 70, 70], [150, 150, 150], [150, 120, 90], [220, 20, 60], [220, 20, 60], [255, 0, 0], [255, 0, 100], [255, 0, 200], [255, 255, 255], [255, 255, 255], [250, 170, 29], [250, 170, 28], [250, 170, 26], [250, 170, 25], [250, 170, 24], [250, 170, 22], [250, 170, 21], [250, 170, 20], [255, 255, 255], [250, 170, 19], [250, 170, 18], [250, 170, 12], [250, 170, 11], [255, 255, 255], [255, 255, 255], [250, 170, 16], [250, 170, 15], [250, 170, 15], [255, 255, 255], [255, 255, 255], [255, 255, 255], [255, 255, 255], [64, 170, 64], [230, 160, 50], [70, 130, 180], [190, 255, 255], [152, 251, 152], [107, 142, 35], [0, 170, 30], [255, 255, 128], [250, 0, 30], [100, 140, 180], [220, 128, 128], [222, 40, 40], [100, 170, 30], [40, 40, 40], [33, 33, 33], [100, 128, 160], [20, 20, 255], [142, 0, 0], [70, 100, 150], [250, 171, 30], [250, 172, 30], [250, 173, 30], [250, 174, 30], [250, 175, 30], [250, 176, 30], [210, 170, 100], [153, 153, 153], [153, 153, 153], [128, 128, 128], [0, 0, 80], [210, 60, 60], [250, 170, 30], [250, 170, 30], [250, 170, 30], [250, 170, 30], [250, 170, 30], [250, 170, 30], [192, 192, 192], [192, 192, 192], [192, 192, 192], [220, 220, 0], [220, 220, 0], [0, 0, 196], [192, 192, 192], [220, 220, 0], [140, 140, 20], [119, 11, 32], [150, 0, 255], [0, 60, 100], [0, 0, 142], [0, 0, 90], [0, 0, 230], [0, 80, 100], [128, 64, 64], [0, 0, 110], [0, 0, 70], [0, 0, 142], [0, 0, 192], [170, 170, 170], [32, 32, 32], [111, 74, 0], [120, 10, 10], [81, 0, 81], [111, 111, 0], [0, 0, 0])
 
     def __init__(self, 
@@ -176,6 +210,13 @@ class MapillaryDataset(Dataset):
                  crop_size: Optional[tuple[int, int]] = None, 
                  class_mapping_file: Optional[str] = None, 
                  class_definitions_file: Optional[str] = None):
+        """
+        Args:
+            data_dir (str): Mapillary 데이터셋의 루트 디렉토리 경로.
+            crop_size (Optional[tuple[int, int]], optional): 리사이즈할 크기. Defaults to None.
+            class_mapping_file (Optional[str], optional): 클래스 리매핑 JSON 파일 경로. Defaults to None.
+            class_definitions_file (Optional[str], optional): 커스텀 클래스 정의 JSON 파일 경로. Defaults to None.
+        """
         super().__init__()
         self.ignore_index = -1  # Default ignore index
 
@@ -250,6 +291,15 @@ class MapillaryDataset(Dataset):
 
 # region Factory Functions for eval
 def create_dataset(config: dict) -> Dataset:
+    """
+    설정(config)에 따라 적절한 데이터셋 객체를 생성하여 반환하는 팩토리 함수.
+
+    Args:
+        config (dict): 'dataset' 키를 포함하는 설정 딕셔너리.
+
+    Returns:
+        Dataset: 생성된 PyTorch 데이터셋 객체.
+    """
     dataset_config = config["dataset"]
     name = dataset_config["name"]
     path = os.path.expanduser(dataset_config["path"])
@@ -274,6 +324,16 @@ def create_dataset(config: dict) -> Dataset:
         return SegmentationDataset(root=path, split=config.get("split", "val"))
 
 def create_data_loader(dataset: Dataset, config: dict) -> DataLoader:
+    """
+    주어진 데이터셋과 설정을 사용하여 DataLoader를 생성합니다.
+
+    Args:
+        dataset (Dataset): PyTorch 데이터셋 객체.
+        config (dict): 'dataset'과 'runtime' 키를 포함하는 설정 딕셔너리.
+
+    Returns:
+        DataLoader: 생성된 PyTorch 데이터로더.
+    """
     return DataLoader(
         dataset,
         batch_size=config["dataset"]["batch_size"],
@@ -286,11 +346,19 @@ def create_data_loader(dataset: Dataset, config: dict) -> DataLoader:
 
 
 class RemapClasses:
+    """
+    레이블 마스크의 클래스 ID를 새로운 ID로 리매핑하는 변환 클래스.
+    JSON 형식의 매핑 파일을 사용하여 특정 클래스를 합치거나 인덱스를 변경할 때 사용됩니다.
+    """
     def __init__(self, mapping_dict: Dict[int, int], ignore_index: int = 255):
+        """
+        Args:
+            mapping_dict (Dict[int, int]): {old_id: new_id} 형식의 매핑 딕셔너리.
+            ignore_index (int, optional): 매핑되지 않는 클래스에 할당될 무시 인덱스. Defaults to 255.
+        """
         self.mapping_dict = mapping_dict
         self.ignore_index = ignore_index
         
-        # Create a lookup table for fast remapping
         if not self.mapping_dict:
             self.remap_lut = None
             return
@@ -307,18 +375,16 @@ class RemapClasses:
         label_img = sample['label']
         label_array = np.array(label_img, dtype=np.int64)
         
-        # Ensure mask values are within the LUT's bounds, otherwise map to ignore_index
         max_lut_idx = len(self.remap_lut) - 1
-        # Pixels with values greater than the max known ID are mapped to ignore_index
         label_array[label_array > max_lut_idx] = self.ignore_index
         
-        # Apply the remapping using the lookup table
         new_label_array = self.remap_lut[label_array]
         
         sample['label'] = Image.fromarray(new_label_array.astype(np.uint8), mode=label_img.mode)
         return sample
 
 class SegCompose:
+    """여러 변환(transform)들을 순차적으로 적용하기 위한 Compose 클래스."""
     def __init__(self, transforms: List[callable]):
         self.transforms = transforms
 
@@ -328,12 +394,14 @@ class SegCompose:
         return sample
 
 class SegToTensor:
+    """PIL Image를 PyTorch 텐서로 변환합니다."""
     def __call__(self, sample: Dict[str, Any]) -> Dict[str, Any]:
         image = F.to_tensor(sample['image'])
         label = torch.from_numpy(np.array(sample['label'])).long()
         return {'image': image, 'label': label}
 
 class SegNormalize:
+    """이미지 텐서를 정규화합니다."""
     def __init__(self, mean: List[float], std: List[float]):
         self.mean = mean
         self.std = std
@@ -343,6 +411,7 @@ class SegNormalize:
         return sample
 
 class SegRandomHorizontalFlip:
+    """이미지와 레이블에 대해 랜덤 수평 뒤집기를 적용합니다."""
     def __init__(self, p: float = 0.5):
         self.p = p
 
@@ -353,26 +422,29 @@ class SegRandomHorizontalFlip:
         return sample
 
 class SegRandomResizedCrop:
+    """이미지와 레이블에 대해 랜덤 리사이즈 및 크롭을 적용합니다."""
     def __init__(self, size: int, scale: tuple[float, float] = (0.5, 2.0)):
         self.size = (size, size)
         self.scale = scale
 
     def __call__(self, sample: Dict[str, Any]) -> Dict[str, Any]:
         i, j, h, w = transforms.RandomResizedCrop.get_params(sample['image'], self.scale, ratio=(0.75, 1.33))
-        sample['image'] = F.resized_crop(sample['image'], i, j, h, w, self.size, Image.BILINEAR)
-        sample['label'] = F.resized_crop(sample['label'], i, j, h, w, self.size, Image.NEAREST)
+        sample['image'] = F.resized_crop(sample['image'], i, j, h, w, self.size, transforms.InterpolationMode.BILINEAR)
+        sample['label'] = F.resized_crop(sample['label'], i, j, h, w, self.size, transforms.InterpolationMode.NEAREST)
         return sample
 
 class SegResize:
+    """이미지와 레이블을 주어진 크기로 리사이즈합니다."""
     def __init__(self, size: int):
         self.size = (size, size)
 
     def __call__(self, sample: Dict[str, Any]) -> Dict[str, Any]:
-        sample['image'] = F.resize(sample['image'], self.size, Image.BILINEAR)
-        sample['label'] = F.resize(sample['label'], self.size, Image.NEAREST)
+        sample['image'] = F.resize(sample['image'], self.size, transforms.InterpolationMode.BILINEAR)
+        sample['label'] = F.resize(sample['label'], self.size, transforms.InterpolationMode.NEAREST)
         return sample
 
 class SegCenterCrop:
+    """이미지와 레이블의 중앙을 크롭합니다."""
     def __init__(self, size: int):
         self.size = (size, size)
 
@@ -382,6 +454,10 @@ class SegCenterCrop:
         return sample
 
 class SegmentationDataset(Dataset):
+    """
+    일반적인 세그멘테이션 데이터셋을 위한 PyTorch Dataset 클래스.
+    'images'와 'labels' 폴더 구조를 가진 데이터셋에 사용될 수 있습니다.
+    """
     def __init__(
         self,
         root: str,
@@ -392,6 +468,16 @@ class SegmentationDataset(Dataset):
         image_suffix: str = ".jpg",
         label_suffix: str = ".png",
     ):
+        """
+        Args:
+            root (str): 데이터셋의 루트 디렉토리.
+            split (str): 'train', 'val' 등 데이터셋의 분할.
+            transform (Optional[callable], optional): 샘플에 적용할 변환. Defaults to None.
+            image_dir_name (str, optional): 이미지 폴더 이름. Defaults to "images".
+            label_dir_name (str, optional): 레이블 폴더 이름. Defaults to "labels".
+            image_suffix (str, optional): 이미지 파일 확장자. Defaults to ".jpg".
+            label_suffix (str, optional): 레이블 파일 확장자. Defaults to ".png".
+        """
         self.root = root
         self.split = split
         self.transform = transform
@@ -426,6 +512,12 @@ class SegmentationDataset(Dataset):
         return sample
 
 class SegDataProvider(DataProvider):
+    """
+    세그멘테이션 태스크를 위한 데이터 프로바이더.
+
+    `DataProvider`를 상속받아, 학습/검증용 데이터셋과 데이터로더를 구성하고
+    데이터 증강 및 변환 파이프라인을 구축하는 역할을 총괄합니다.
+    """
     name = "seg"
     
     def __init__(
@@ -449,6 +541,27 @@ class SegDataProvider(DataProvider):
         val_split: str = "val",
         class_mapping_path: Optional[str] = None,
     ):
+        """
+        Args:
+            data_dir (Optional[str], optional): 데이터셋 루트 디렉토리.
+            train_batch_size (int, optional): 학습용 배치 사이즈.
+            test_batch_size (int, optional): 테스트용 배치 사이즈.
+            valid_size (Optional[int | float], optional): 검증셋 크기 또는 비율.
+            n_worker (int, optional): 데이터 로딩에 사용할 워커 프로세스 수.
+            image_size (int | list[int], optional): 이미지 크기.
+            num_replicas (Optional[int], optional): 분산 학습 시 전체 GPU 수.
+            rank (Optional[int], optional): 분산 학습 시 현재 GPU의 순위.
+            train_ratio (Optional[float], optional): 전체 데이터 중 학습에 사용할 비율.
+            drop_last (bool, optional): 마지막 배치가 배치 사이즈보다 작을 경우 버릴지 여부.
+            n_classes (int, optional): 클래스 개수.
+            image_dir_name (str, optional): 이미지 폴더 이름.
+            label_dir_name (str, optional): 레이블 폴더 이름.
+            image_suffix (str, optional): 이미지 파일 확장자.
+            label_suffix (str, optional): 레이블 파일 확장자.
+            train_split (str, optional): 학습용 데이터 분할 이름.
+            val_split (str, optional): 검증용 데이터 분할 이름.
+            class_mapping_path (Optional[str], optional): 클래스 리매핑 JSON 파일 경로.
+        """
         self.data_dir = data_dir
         self.n_classes = n_classes
         self.image_dir_name = image_dir_name
@@ -476,6 +589,7 @@ class SegDataProvider(DataProvider):
         )
 
     def build_train_transform(self, image_size: Optional[tuple[int, int]] = None) -> Any:
+        """학습용 데이터 변환 파이프라인을 구축합니다."""
         image_size = self.image_size if image_size is None else image_size
         
         train_transforms = []
@@ -491,6 +605,7 @@ class SegDataProvider(DataProvider):
         return SegCompose(train_transforms)
 
     def build_valid_transform(self, image_size: Optional[tuple[int, int]] = None) -> Any:
+        """검증/테스트용 데이터 변환 파이프라인을 구축합니다."""
         image_size = (self.active_image_size if image_size is None else image_size)[0]
         
         valid_transforms = []
@@ -505,7 +620,8 @@ class SegDataProvider(DataProvider):
         ])
         return SegCompose(valid_transforms)
 
-    def build_datasets(self) -> tuple[Any, Any, Any]:
+    def build_datasets(self) -> tuple[Dataset, Dataset, None]:
+        """학습 및 검증 데이터셋 객체를 생성합니다."""
         train_transform = self.build_train_transform()
         valid_transform = self.build_valid_transform()
 
@@ -529,3 +645,4 @@ class SegDataProvider(DataProvider):
         )
         
         return train_dataset, val_dataset, None
+

@@ -13,62 +13,93 @@ from efficientvit.models.utils import list_join
 
 __all__ = ["SegTrainer"]
 
-def _fast_hist(label_true, label_pred, n_class):
+
+def _fast_hist(label_true: np.ndarray, label_pred: np.ndarray, n_class: int) -> np.ndarray:
     """
-    혼동 행렬(confusion matrix)을 빠르게 계산합니다.
+    혼동 행렬(confusion matrix)을 효율적으로 계산합니다.
 
     Args:
-        label_true (ndarray): 실제 레이블.
-        label_pred (ndarray): 예측 레이블.
-        n_class (int): 클래스의 수.
+        label_true (np.ndarray): 실제 레이블 값으로 이루어진 배열.
+        label_pred (np.ndarray): 모델이 예측한 레이블 값으로 이루어진 배열.
+        n_class (int): 전체 클래스의 개수.
 
     Returns:
-        ndarray: 계산된 혼동 행렬.
+        np.ndarray: (n_class, n_class) 형태의 혼동 행렬.
     """
+    # 유효한 레이블 범위 (0 <= label < n_class) 에 해당하는 마스크를 생성합니다.
     mask = (label_true >= 0) & (label_true < n_class)
+    # 혼동 행렬을 1차원 배열로 계산한 뒤, (n_class, n_class) 형태로 변환합니다.
     hist = np.bincount(
-        n_class * label_true[mask].astype(int) +
-        label_pred[mask], minlength=n_class ** 2).reshape(n_class, n_class)
+        n_class * label_true[mask].astype(int) + label_pred[mask],
+        minlength=n_class**2,
+    ).reshape(n_class, n_class)
     return hist
+
 
 class SegTrainer(Trainer):
     """
     Semantic Segmentation을 위한 Trainer 클래스.
-    `Trainer`를 상속받아 세그멘테이션 태스크에 맞는 학습 및 검증 로직을 구현합니다.
+
+    `Trainer` 베이스 클래스를 상속받아, 세그멘테이션 태스크에 특화된
+    학습 및 검증 로직을 구현합니다.
     """
-    def __init__(self, path: str, model: nn.Module, data_provider):
+
+    def __init__(self, path: str, model: nn.Module, data_provider: Any) -> None:
         """
         SegTrainer를 초기화합니다.
 
         Args:
-            path (str): 실험 결과를 저장할 경로.
-            model (nn.Module): 학습할 모델.
-            data_provider: 데이터 프로바이더 객체.
+            path (str): 실험 결과(로그, 체크포인트)를 저장할 경로.
+            model (nn.Module): 학습 및 검증에 사용할 모델.
+            data_provider (Any): 학습 및 검증 데이터를 제공하는 데이터 프로바이더 객체.
         """
         super().__init__(
             path=path,
             model=model,
             data_provider=data_provider,
         )
-        # 손실 함수로 CrossEntropyLoss를 사용하며, 255는 무시할 인덱스로 설정합니다.
+        # 세그멘테이션의 손실 함수로 CrossEntropyLoss를 사용합니다.
+        # `ignore_index=255`는 레이블 값이 255인 픽셀을 손실 계산에서 제외시킵니다.
         self.criterion = nn.CrossEntropyLoss(ignore_index=255)
-        # 데이터셋의 클래스 수를 data_provider에서 가져옵니다.
         self.n_classes = data_provider.n_classes
 
-    def before_step(self, sample: dict[str, Any]) -> dict[str, Any]:
+    def before_step(self, sample: dict[str, Any]) -> dict[str, torch.Tensor]:
+        """
+        학습/검증 스텝이 실행되기 전, 데이터를 GPU로 이동시키는 전처리 작업을 수행합니다.
+
+        Args:
+            sample (dict[str, Any]): 데이터 프로바이더로부터 받은 데이터 샘플.
+                                     {'image': torch.Tensor, 'label': torch.Tensor} 형태를 기대합니다.
+
+        Returns:
+            dict[str, torch.Tensor]: 데이터가 GPU로 이동된 딕셔너리.
+        """
         img: torch.Tensor = sample["image"]
         lbl: torch.Tensor = sample["label"]
+        # `non_blocking=True`는 비동기 전송을 가능하게 하여 성능을 향상시킬 수 있습니다.
+        # `memory_format=torch.channels_last`는 특정 연산(예: Conv)의 성능을 향상시킬 수 있습니다.
         img = img.to("cuda", non_blocking=True, memory_format=torch.channels_last)
         lbl = lbl.to("cuda", non_blocking=True)
         return {"image": img, "label": lbl}
 
-    def _validate(self, model, data_loader, epoch) -> dict[str, Any]:
-        """검증 데이터셋으로 모델 성능을 평가합니다."""
-        val_loss = AverageMeter() # 손실 평균을 계산하기 위한 객체
-        val_miou = AverageMeter() # mIoU 평균을 계산하기 위한 객체
-        hist = np.zeros((self.n_classes, self.n_classes)) # 혼동 행렬 초기화
+    def _validate(self, model: nn.Module, data_loader: Any, epoch: int) -> dict[str, float]:
+        """
+        검증 데이터셋을 사용하여 모델의 성능을 평가합니다.
 
-        with torch.no_grad(): # 그래디언트 계산 비활성화
+        Args:
+            model (nn.Module): 평가할 모델.
+            data_loader (Any): 검증 데이터로더.
+            epoch (int): 현재 에폭 번호 (로깅용).
+
+        Returns:
+            dict[str, float]: 검증 결과 (손실, mIoU)를 담은 딕셔너리.
+                                예: {'val_loss': 0.5, 'val_miou': 0.8}
+        """
+        val_loss = AverageMeter()
+        hist = np.zeros((self.n_classes, self.n_classes))
+
+        model.eval()  # 모델을 평가 모드로 설정
+        with torch.no_grad():  # 그래디언트 계산 비활성화
             with tqdm(
                 total=len(data_loader),
                 desc=f"Validate Epoch #{epoch + 1}",
@@ -77,61 +108,67 @@ class SegTrainer(Trainer):
             ) as t:
                 for sample in data_loader:
                     feed_dict = self.before_step(sample)
-                    images = feed_dict["image"]
-                    labels = feed_dict["label"]
+                    images, labels = feed_dict["image"], feed_dict["label"]
 
-                    # 모델 예측
                     output = model(images)
-                    output = F.interpolate(output, size=labels.shape[1:], mode='bilinear', align_corners=True)
+                    # 모델 출력을 레이블 크기와 맞추기 위해 보간(interpolate)합니다.
+                    output = F.interpolate(output, size=labels.shape[1:], mode="bilinear", align_corners=True)
 
-                    # 손실 계산
                     loss = self.criterion(output, labels)
-
                     val_loss.update(loss.item(), images.size(0))
-                    
-                    # IoU 계산을 위한 예측 및 혼동 행렬 업데이트
+
+                    # IoU 계산을 위해 예측 결과를 argmax로 구하고 혼동 행렬을 업데이트합니다.
                     pred = torch.argmax(output, dim=1)
                     hist += _fast_hist(labels.cpu().numpy(), pred.cpu().numpy(), self.n_classes)
 
-                    t.set_postfix(
-                        {
-                            "loss": val_loss.avg,
-                            "#samples": val_loss.get_count(),
-                            "bs": images.shape[0],
-                            "res": images.shape[2],
-                        }
-                    )
+                    t.set_postfix({"loss": val_loss.avg, "bs": images.shape[0]})
                     t.update()
-        
-        # 분산 학습 환경에서 모든 프로세스의 혼동 행렬을 동기화합니다.
+
+        # 분산 학습 시, 모든 GPU의 혼동 행렬을 합산합니다.
         if self.data_provider.num_replicas is not None:
             hist_tensor = torch.from_numpy(hist).cuda()
-            hist = sync_tensor(hist_tensor, reduce='sum').cpu().numpy()
+            hist = sync_tensor(hist_tensor, reduce="sum").cpu().numpy()
 
-        # mIoU 계산
+        # 혼동 행렬로부터 mIoU(mean Intersection over Union)를 계산합니다.
         iu = np.diag(hist) / (hist.sum(axis=1) + hist.sum(axis=0) - np.diag(hist))
         miou = np.nanmean(iu)
-        val_miou.update(miou, val_loss.get_count())
 
-        return {"val_loss": val_loss.avg, "val_miou": val_miou.avg}
+        return {"val_loss": val_loss.avg, "val_miou": miou}
 
-    def run_step(self, feed_dict: dict[str, Any]) -> dict[str, Any]:
-        """단일 학습 스텝(배치)을 실행합니다."""
-        images = feed_dict['image']
-        labels = feed_dict['label']
+    def run_step(self, feed_dict: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
+        """
+        단일 학습 스텝(배치)을 실행하고 손실을 계산합니다.
 
-        # Automatic Mixed Precision (AMP) 활성화
+        Args:
+            feed_dict (dict[str, torch.Tensor]): `before_step`을 거친 GPU 텐서 딕셔너리.
+
+        Returns:
+            dict[str, torch.Tensor]: 계산된 손실 값을 담은 딕셔너리. {'loss': torch.Tensor}
+        """
+        images = feed_dict["image"]
+        labels = feed_dict["label"]
+
+        # AMP(Automatic Mixed Precision)를 사용하여 학습 속도를 높이고 메모리 사용량을 줄입니다.
         with torch.autocast(device_type="cuda", dtype=self.amp_dtype, enabled=self.enable_amp):
             output = self.model(images)
-            output = F.interpolate(output, size=labels.shape[1:], mode='bilinear', align_corners=True)
+            output = F.interpolate(output, size=labels.shape[1:], mode="bilinear", align_corners=True)
             loss = self.criterion(output, labels)
-        
-        # 손실에 대한 그래디언트를 계산하고 역전파합니다.
+
+        # 스케일된 손실에 대해 역전파를 수행합니다.
         self.scaler.scale(loss).backward()
         return {"loss": loss}
 
-    def _train_one_epoch(self, epoch: int) -> dict[str, Any]:
-        """한 에폭 동안의 전체 학습 루프를 실행합니다."""
+    def _train_one_epoch(self, epoch: int) -> dict[str, float]:
+        """
+        한 에폭(epoch) 동안의 전체 학습 루프를 실행합니다.
+
+        Args:
+            epoch (int): 현재 에폭 번호.
+
+        Returns:
+            dict[str, float]: 에폭의 평균 학습 손실. {'train_loss': float}
+        """
+        self.model.train()  # 모델을 학습 모드로 설정
         train_loss = AverageMeter()
 
         with tqdm(
@@ -141,46 +178,41 @@ class SegTrainer(Trainer):
             file=sys.stdout,
         ) as t:
             for sample in self.data_provider.train:
-                self.optimizer.zero_grad() # 그래디언트 초기화
+                self.optimizer.zero_grad()
                 feed_dict = self.before_step(sample)
-                output_dict = self.run_step(feed_dict) # 학습 스텝 실행
-                self.after_step() # 옵티마이저 및 스케줄러 업데이트
+                output_dict = self.run_step(feed_dict)
+                self.after_step()  # 옵티마이저 스텝 및 LR 스케줄러 스텝
 
-                train_loss.update(output_dict["loss"].item(), sample['image'].size(0))
+                train_loss.update(output_dict["loss"].item(), sample["image"].size(0))
 
-                # 진행 상황 표시
                 t.set_postfix(
                     {
                         "loss": train_loss.avg,
-                        "bs": sample['image'].shape[0],
-                        "res": sample['image'].shape[2],
-                        "lr": list_join(
-                            sorted(set([group["lr"] for group in self.optimizer.param_groups])),
-                            "#",
-                            "%.1E",
-                        ),
-                        "progress": self.run_config.progress,
+                        "lr": f'{self.optimizer.param_groups[0]["lr"]:.1E}',
                     }
                 )
                 t.update()
         return {"train_loss": train_loss.avg}
 
     def train(self) -> None:
-        """전체 학습 과정을 관리하고 실행합니다."""
-        # Early stopping 설정
-        early_stopping_patience = getattr(self.run_config, 'early_stopping_patience', 0)
-        early_stopping_metric = getattr(self.run_config, 'early_stopping_metric', 'val_miou')
+        """
+        전체 학습 과정을 관리하고 실행합니다.
+        `start_epoch`부터 `n_epochs`까지 루프를 돌며 학습과 검증을 반복하고,
+        모델을 저장하며, 조기 종료(early stopping) 로직을 처리합니다.
+        """
+        # 조기 종료(Early stopping) 관련 설정을 run_config에서 가져옵니다.
+        early_stopping_patience = getattr(self.run_config, "early_stopping_patience", 0)
+        early_stopping_metric = getattr(self.run_config, "early_stopping_metric", "val_miou")
         early_stopping_counter = 0
-        
-        if early_stopping_metric == 'val_miou':
+
+        if early_stopping_metric == "val_miou":
             best_val_for_early_stopping = self.best_val
             is_better = lambda current, best: current > best
-        elif early_stopping_metric == 'val_loss':
-            best_val_for_early_stopping = float('inf')
+        elif early_stopping_metric == "val_loss":
+            best_val_for_early_stopping = float("inf")
             is_better = lambda current, best: current < best
         else:
-            # 지원하지 않는 메트릭이면 early stopping 비활성화
-            early_stopping_patience = 0
+            early_stopping_patience = 0  # 지원하지 않는 메트릭이면 조기 종료 비활성화
 
         if early_stopping_patience > 0 and is_master():
             self.write_log(f"Early stopping enabled: patience={early_stopping_patience}, metric='{early_stopping_metric}'")
@@ -189,34 +221,28 @@ class SegTrainer(Trainer):
             self.data_provider.set_epoch(epoch)
             self.train_one_epoch(epoch)
             val_info_dict = self.validate(epoch=epoch, is_test=False)
-            self.write_log(f"Epoch {epoch + 1} Validation: Loss={val_info_dict['val_loss']:.4f}, mIoU={val_info_dict['val_miou']:.4f}", prefix="valid")
 
-            # 최고의 성능을 보인 모델을 저장합니다. (기존 로직)
-            is_best = val_info_dict["val_miou"] > self.best_val
-            self.best_val = max(val_info_dict["val_miou"], self.best_val)
+            val_loss = val_info_dict["val_loss"]
+            val_miou = val_info_dict["val_miou"]
+            self.write_log(f"Epoch {epoch + 1} Validation: Loss={val_loss:.4f}, mIoU={val_miou:.4f}", prefix="valid")
 
+            # mIoU 기준으로 최고의 모델을 저장합니다.
+            is_best = val_miou > self.best_val
+            self.best_val = max(val_miou, self.best_val)
             self.save_model(
                 only_state_dict=True,
                 epoch=epoch,
                 model_name="model_best.pt" if is_best else "checkpoint.pt",
             )
 
-            # Early stopping 로직
+            # 조기 종료 로직을 수행합니다.
             if early_stopping_patience > 0:
                 current_metric_val = val_info_dict[early_stopping_metric]
                 if is_better(current_metric_val, best_val_for_early_stopping):
                     best_val_for_early_stopping = current_metric_val
                     early_stopping_counter = 0
-                    if is_master():
-                        self.write_log(f"Early stopping metric '{early_stopping_metric}' improved to {best_val_for_early_stopping:.4f}.", prefix="valid")
                 else:
                     early_stopping_counter += 1
-                    if is_master():
-                        self.write_log(
-                            f"Early stopping counter: {early_stopping_counter}/{early_stopping_patience}. "
-                            f"Metric '{early_stopping_metric}' did not improve from {best_val_for_early_stopping:.4f}.",
-                            prefix="valid"
-                        )
                 
                 if early_stopping_counter >= early_stopping_patience:
                     if is_master():
