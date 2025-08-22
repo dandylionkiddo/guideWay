@@ -817,3 +817,58 @@ class OpSequential(nn.Module):
         for op in self.op_list:
             x = op(x)
         return x
+
+# --- DropPath (Stochastic Depth) ---
+class DropPath(nn.Module):
+    def __init__(self, drop_prob: float = 0.):
+        super().__init__()
+        self.drop_prob = float(drop_prob)
+
+    def forward(self, x):
+        if self.drop_prob == 0. or not self.training:
+            return x
+        keep_prob = 1 - self.drop_prob
+        shape = (x.shape[0],) + (1,) * (x.ndim - 1)  # (B, 1, ..., 1)
+        random_tensor = keep_prob + torch.rand(shape, dtype=x.dtype, device=x.device)
+        random_tensor.floor_()
+        return x.div(keep_prob) * random_tensor
+
+# --- DWConv for Mix-FFN ---
+class DWConv(nn.Module):
+    def __init__(self, dim: int):
+        super().__init__()
+        self.dwconv = nn.Conv2d(dim, dim, kernel_size=3, stride=1, padding=1, groups=dim)
+
+    def forward(self, x, H, W):
+        # x: (B, N, C) with N = H*W
+        B, N, C = x.shape
+        x = x.transpose(1, 2).reshape(B, C, H, W)  # (B, C, H, W)
+        x = self.dwconv(x)
+        x = x.flatten(2).transpose(1, 2).contiguous()  # (B, N, C)
+        return x
+
+# --- Mix-FFN (SegFormer-style MLP) ---
+class Mlp(nn.Module):
+    def __init__(self, in_features, hidden_features=None, out_features=None,
+                 act_layer=nn.GELU, drop=0.):
+        super().__init__()
+        out_features = out_features or in_features
+        hidden_features = hidden_features or in_features
+
+        self.fc1 = nn.Linear(in_features, hidden_features)
+        self.dwconv = DWConv(hidden_features)  # 핵심: 공간 정보 반영
+        self.act = act_layer()
+        self.fc2 = nn.Linear(hidden_features, out_features)
+        self.drop = nn.Dropout(drop)
+
+    def forward(self, x, H=None, W=None):
+        # 기본 형태: (B, N, C)
+        x = self.fc1(x)
+        # H, W 주어지면 Mix-FFN 동작 / 없으면 일반 MLP로 폴백
+        if H is not None and W is not None:
+            x = self.dwconv(x, H, W)
+        x = self.act(x)
+        x = self.drop(x)
+        x = self.fc2(x)
+        x = self.drop(x)
+        return x
