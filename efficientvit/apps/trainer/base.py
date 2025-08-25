@@ -12,6 +12,7 @@
 `_train_one_epoch`, `train` 등과 같은 추상 메서드를 자신의 태스크에 맞게 구현해야 합니다.
 """
 import os
+import yaml
 from typing import Any, Optional
 from datetime import datetime
 
@@ -277,6 +278,14 @@ class Trainer:
             amp (str, optional): AMP 타입 ("fp16", "bf16", "fp32"). Defaults to "fp32".
         """
         self.run_config = run_config
+        
+        # 실행 설정을 yaml 파일로 저장
+        config_path = os.path.join(self.logs_path, "run_config.yaml")
+        if is_master():
+            with open(config_path, "w") as f:
+                yaml.dump(self.run_config.__dict__, f, default_flow_style=False, sort_keys=False)
+            self.write_log(f"Run config saved to {config_path}", print_log=False)
+
         if get_dist_size() > 1:
             self.model = nn.parallel.DistributedDataParallel(
                 self.model.cuda(),
