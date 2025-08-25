@@ -121,13 +121,7 @@ def main() -> None:
         data_provider=data_provider,
     )
 
-    # 8. 설정 파일 백업
-    # 재현성을 위해, 실행에 사용된 YAML 설정 파일을 결과 디렉토리에 복사합니다.
-    os.makedirs(args.path, exist_ok=True)
-    shutil.copy(args.config, os.path.join(args.path, "config.yaml"))
-    print(f"Copied config file to {os.path.join(args.path, 'config.yaml')}")
-
-    # 9. 학습 시작
+    # 8. 학습 시작
     # `prep_for_training`: 옵티마이저, 스케줄러, 분산 학습 설정, AMP(Automatic Mixed Precision) 등 학습 전 준비
     trainer.prep_for_training(run_config, ema_decay=0.9998, amp="fp16")
     # `load_model`: 저장된 체크포인트가 있으면 이어서 학습하기 위해 로드
