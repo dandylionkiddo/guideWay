@@ -48,7 +48,7 @@ class SegIOU:
         Returns:
             dict[str, torch.Tensor]: 클래스별 교집합("i")과 합집합("u") 텐서를 담은 딕셔너리.
         """
-        mask = targets != self.ignore_index
+        mask = (targets >= 0) & (targets < self.num_classes)
 
         # torch.histc는 float 텐서만 지원하므로, int 타입의 레이블을 float으로 변환합니다.
         # 또한 min=1로 설정하므로, 0번 클래스를 포함하기 위해 모든 값에 1을 더합니다.

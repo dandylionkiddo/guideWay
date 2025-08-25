@@ -1,3 +1,8 @@
+import json
+
+# custom_class_mapping.json 파일의 내용을 복사하여 문자열로 정의
+# 실제 파일 경로에서 읽어오려면 이 부분을 수정하세요.
+json_data_string = '''
 {
     "19": 0,
     "24": 0,
@@ -124,3 +129,32 @@
     "11": 18,
     "87": 18
 }
+'''
+
+# JSON 문자열을 파이썬 딕셔너리로 변환
+try:
+    # 파일에서 직접 읽어오도록 수정
+    with open('applications/efficientvit_seg/custom_class_mapping.json', 'r') as f:
+        mapping_data = json.load(f)
+        
+    # JSON 키를 정수형으로 변환하여 세트로 만듦
+    mapped_ids = {int(k) for k in mapping_data.keys()}
+
+    # Mapillary Vistas v2.0의 전체 ID 세트 (0부터 123까지)
+    all_vistas_ids = set(range(124))
+
+    # 매핑 파일에 누락된 ID 찾기
+    missing_ids = sorted(list(all_vistas_ids - mapped_ids))
+
+    if not missing_ids:
+        print("✅ 확인 완료: 0부터 123까지의 모든 ID가 custom_class_mapping.json에 포함되어 있습니다.")
+    else:
+        print("❌ 확인 필요: 다음 ID들이 custom_class_mapping.json에 누락되었습니다.")
+        print(missing_ids)
+
+except FileNotFoundError:
+    print("오류: 'applications/efficientvit_seg/custom_class_mapping.json' 파일을 찾을 수 없습니다.")
+except json.JSONDecodeError:
+    print("오류: JSON 데이터 형식이 올바르지 않습니다.")
+except Exception as e:
+    print(f"오류 발생: {e}")

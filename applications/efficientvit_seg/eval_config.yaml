@@ -28,9 +28,9 @@ data_provider:
 
 # 모델 설정 (기존 설정 유지)
 model:
-  name: "efficientvit-seg-b1"
+  name: "efficientvit-seg-b0"
   n_classes: 19
-  weight_url: "D:/AIffel/EfficientViT/efficientvit/output/from_runpod/efficientvit_b1.pt"
+  weight_url: "D:/AIffel/EfficientViT/efficientvit/output/seg_test_run/20250824-182101/checkpoint/model_best.pt"
 
 # 평가 결과 저장 경로
 save_path: "./output/eval_results"

@@ -92,8 +92,7 @@ class SegTrainer(Trainer):
             epoch (int): 현재 에폭 번호 (로깅용).
 
         Returns:
-            dict[str, float]: 검증 결과 (손실, mIoU)를 담은 딕셔너리.
-                                예: {'val_loss': 0.5, 'val_miou': 0.8}
+            dict[str, float]: 검증 결과 (손실, mIoU, 클래스별 상세 지표)를 담은 딕셔너리.
         """
         val_loss = AverageMeter()
         hist = np.zeros((self.n_classes, self.n_classes))
@@ -111,29 +110,58 @@ class SegTrainer(Trainer):
                     images, labels = feed_dict["image"], feed_dict["label"]
 
                     output = model(images)
-                    # 모델 출력을 레이블 크기와 맞추기 위해 보간(interpolate)합니다.
                     output = F.interpolate(output, size=labels.shape[1:], mode="bilinear", align_corners=True)
 
                     loss = self.criterion(output, labels)
                     val_loss.update(loss.item(), images.size(0))
 
-                    # IoU 계산을 위해 예측 결과를 argmax로 구하고 혼동 행렬을 업데이트합니다.
                     pred = torch.argmax(output, dim=1)
                     hist += _fast_hist(labels.cpu().numpy(), pred.cpu().numpy(), self.n_classes)
 
                     t.set_postfix({"loss": val_loss.avg, "bs": images.shape[0]})
                     t.update()
 
-        # 분산 학습 시, 모든 GPU의 혼동 행렬을 합산합니다.
         if self.data_provider.num_replicas is not None:
             hist_tensor = torch.from_numpy(hist).cuda()
             hist = sync_tensor(hist_tensor, reduce="sum").cpu().numpy()
 
-        # 혼동 행렬로부터 mIoU(mean Intersection over Union)를 계산합니다.
-        iu = np.diag(hist) / (hist.sum(axis=1) + hist.sum(axis=0) - np.diag(hist))
+        # 클래스별 intersection, union, IoU 계산
+        intersection = np.diag(hist)
+        union = hist.sum(axis=1) + hist.sum(axis=0) - np.diag(hist)
+        # 0으로 나누는 경우를 방지하기 위해 작은 값(epsilon)을 더합니다.
+        iu = intersection / (union + 1e-10)
         miou = np.nanmean(iu)
 
-        return {"val_loss": val_loss.avg, "val_miou": miou}
+        # 클래스 이름 가져오기 (data_provider에 있다고 가정)
+        try:
+            class_names = self.data_provider.classes
+        except AttributeError:
+            class_names = [f"class_{i}" for i in range(self.n_classes)]
+
+        # 결과 로깅
+        if is_master():
+            self.write_log("-" * 80, prefix="valid")
+            self.write_log(f"{'Class':<20} | {'IoU':>10} | {'Intersection':>15} | {'Union':>15}", prefix="valid")
+            self.write_log("-" * 80, prefix="valid")
+            for i, class_name in enumerate(class_names):
+                self.write_log(
+                    f"{class_name:<20} | {iu[i]:>10.4f} | {int(intersection[i]):>15} | {int(union[i]):>15}",
+                    prefix="valid",
+                )
+            self.write_log("-" * 80, prefix="valid")
+
+        # 결과 딕셔너리 구성
+        results = {
+            "val_loss": val_loss.avg,
+            "val_miou": miou,
+        }
+        # 클래스별 상세 결과 추가
+        for i, class_name in enumerate(class_names):
+            results[f"val_iou_{class_name}"] = iu[i]
+            results[f"val_intersection_{class_name}"] = intersection[i]
+            results[f"val_union_{class_name}"] = union[i]
+
+        return results
 
     def run_step(self, feed_dict: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
         """

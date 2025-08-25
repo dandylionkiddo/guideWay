@@ -1,6 +1,6 @@
 # model
 model:
-  name: segformer-b0 # 1. 모델 이름을 segformer-b0로 변경
+  name: efficientvit-seg-b0 # 1. 모델 이름을 segformer-b0로 변경
 
 # data provider (데이터셋 설정은 그대로 유지)
 data_provider:
@@ -52,3 +52,4 @@ model_init:
   last_gamma: 0.0
 #   # 사전 학습된 가중치를 사용하되, head 부분은 랜덤 초기화되므로 finetuning과 유사하게 동작
 #   backbone_init_from: D:\AIffel\EfficientViT\efficientvit\efficientvit\assets\checkpoints\efficientvit_seg\efficientvit_seg_b0_cityscapes.pt
+  init_from: d:\AIffel\EfficientViT\efficientvit\output\from_runpod\checkpoint.pt
