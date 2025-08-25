@@ -1,5 +1,5 @@
 """
-이 스크립트는 EfficientViT-Seg 모델의 학습을 시작하는 메인 진입점입니다.
+이 스크립트는 EfficientViT-Seg 또는 SegFormer 모델의 학습을 시작하는 메인 진입점입니다.
 YAML 설정 파일을 기반으로 학습 환경, 데이터 로더, 모델, 트레이너를 구성하고
 전체 학습 파이프라인을 실행합니다.
 """
@@ -22,7 +22,10 @@ from efficientvit.apps.utils import get_dist_size  # 분산 학습 시 전체 GP
 from efficientvit.models.efficientvit import seg as models  # Segmentation 모델 아키텍처
 from efficientvit.segcore.data_provider import SegDataProvider  # Segmentation 데이터 처리기
 from efficientvit.segcore.trainer import SegTrainer  # Segmentation 학습 로직 담당 트레이너
-from efficientvit.seg_model_zoo import create_efficientvit_seg_model  # 모델 생성 및 사전학습 가중치 로드
+from efficientvit.seg_model_zoo import (
+    create_efficientvit_seg_model,
+    create_segformer_model,
+)  # 모델 생성 및 사전학습 가중치 로드
 
 # `efficientvit.models.efficientvit.seg` 모듈에 정의된 모든 모델 빌더 함수를
 # 딕셔너리 형태로 등록합니다. 이를 통해 YAML 설정 파일에서 모델 이름을 키로 사용하여
@@ -34,12 +37,16 @@ ALL_SEG_MODELS = {name: func for name, func in models.__dict__.items() if name.s
 ALL_SEG_DATA_PROVIDERS = [SegDataProvider]
 
 # 커맨드라인 인자를 파싱하기 위한 ArgumentParser를 설정합니다.
-# --config: 실험 설정을 담은 YAML 파일 경로
-# --path: 학습 결과(체크포인트, 로그 등)를 저장할 디렉토리 경로
 parser = argparse.ArgumentParser()
 parser.add_argument("--config", type=str, required=True, help="실험 설정 YAML 파일 경로")
 parser.add_argument("--path", type=str, required=True, help="결과 저장 디렉토리 경로")
-
+parser.add_argument(
+    "--arch",
+    type=str,
+    default="efficientvit",
+    choices=["efficientvit", "segformer"],
+    help="사용할 모델 아키텍처 선택 (efficientvit 또는 segformer)",
+)
 
 def main() -> None:
     """
@@ -49,7 +56,7 @@ def main() -> None:
     구성한 뒤 학습을 시작합니다.
 
     - 입력:
-        - sys.argv를 통해 커맨드라인 인자(--config, --path)를 받습니다.
+        - sys.argv를 통해 커맨드라인 인자(--config, --path, --arch)를 받습니다.
     - 출력:
         - 없음 (None). 학습 완료 후 함수가 종료됩니다.
     """
@@ -82,16 +89,23 @@ def main() -> None:
     # 설정 파일에서 모델 이름, 클래스 수, 데이터셋 이름을 가져옵니다.
     model_name = exp_config["model"]["name"]
     n_classes = exp_config.get("data_provider", {}).get("n_classes")
-    dataset_name = exp_config.get("data_provider", {}).get("dataset")
 
-    # `create_efficientvit_seg_model` 함수를 통해 지정된 `model_name`과 `dataset_name`에
-    # 맞는 모델 아키텍처를 생성합니다. `pretrained=False`이므로 가중치는 로드하지 않습니다.
-    model = create_efficientvit_seg_model(
-        model_name,
-        dataset=dataset_name,
-        pretrained=False,
-        n_classes=n_classes,
-    )
+    if args.arch == "efficientvit":
+        dataset_name = exp_config.get("data_provider", {}).get("dataset")
+        model = create_efficientvit_seg_model(
+            model_name,
+            dataset=dataset_name,
+            pretrained=False,
+            n_classes=n_classes,
+        )
+    elif args.arch == "segformer":
+        model = create_segformer_model(
+            model_name,
+            pretrained=False,
+            n_classes=n_classes,
+        )
+    else:
+        raise ValueError(f"Unknown architecture: {args.arch}")
 
     # 6. 모델 가중치 초기화
     # `init_model` 함수는 `exp_config`의 'model_init' 섹션에 정의된 방식

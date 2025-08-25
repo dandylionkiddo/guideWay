@@ -238,6 +238,20 @@ def efficientvit_seg_b1(dataset: str, **kwargs) -> EfficientViTSeg:
             n_classes=19 if custom_n_classes is None else custom_n_classes,
             **build_kwargs_from_config(kwargs, SegHead),
         )
+    elif dataset == "mapillary":
+        head = SegHead(
+            fid_list=["stage4", "stage3", "stage2"],
+            in_channel_list=[256, 128, 64],
+            stride_list=[32, 16, 8],
+            head_stride=8,
+            head_width=64,
+            head_depth=3,
+            expand_ratio=4,
+            middle_op="mbconv",
+            final_expand=4,
+            n_classes=124 if custom_n_classes is None else custom_n_classes,
+            **build_kwargs_from_config(kwargs, SegHead),
+        )
     elif dataset == "ade20k":
         head = SegHead(
             fid_list=["stage4", "stage3", "stage2"],

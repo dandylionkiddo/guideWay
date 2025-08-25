@@ -48,7 +48,7 @@ class SegIOU:
         Returns:
             dict[str, torch.Tensor]: 클래스별 교집합("i")과 합집합("u") 텐서를 담은 딕셔너리.
         """
-        mask = targets != self.ignore_index
+        mask = (targets >= 0) & (targets < self.num_classes)
 
         # torch.histc는 float 텐서만 지원하므로, int 타입의 레이블을 float으로 변환합니다.
         # 또한 min=1로 설정하므로, 0번 클래스를 포함하기 위해 모든 값에 1을 더합니다.
@@ -93,6 +93,11 @@ def get_canvas(
     if image_shape != mask_shape:
         mask = cv2.resize(mask, dsize=(image_shape[1], image_shape[0]), interpolation=cv2.INTER_NEAREST)
     
+    # class_colors가 없는 경우(None)를 대비하여 기본 팔레트 생성
+    if colors is None:
+        # 랜덤 색상 팔레트 생성
+        colors = np.random.randint(0, 255, size=(256, 3), dtype=np.uint8)
+
     seg_mask = np.zeros_like(image, dtype=np.uint8)
     for k, color in enumerate(colors):
         if k < len(colors):
@@ -160,7 +165,7 @@ class Evaluator:
         with torch.inference_mode():
             with tqdm(total=len(self.data_loader), desc="Stage 1: Inference") as t:
                 for feed_dict in self.data_loader:
-                    images, mask = feed_dict["data"].cuda(), feed_dict["label"].cuda()
+                    images, mask = feed_dict["image"].cuda(), feed_dict["label"].cuda()
 
                     start_time = time.time()
                     output = self.model(images)
@@ -183,7 +188,7 @@ class Evaluator:
                     t.update()
 
                     if "save_images" in self.tasks and self.labeled_dir:
-                        results_to_save.append({"feed_dict": feed_dict, "pred": pred.cpu()})
+                        results_to_save.append({"feed_dict": feed_dict, "pred": pred.cpu(), "mask": mask.cpu()})
 
         if "save_images" in self.tasks and self.labeled_dir:
             saving_config = self.config.get("saving", {})
@@ -195,26 +200,35 @@ class Evaluator:
             print(f"Saving {len(sampled_results)} out of {len(results_to_save)} images...")
             with tqdm(total=len(sampled_results), desc="Stage 2: Saving Images") as t:
                 for result in sampled_results:
-                    self.save_result_images(result["feed_dict"], result["pred"], self.labeled_dir)
+                    self.save_result_images(result["feed_dict"], result["pred"], result["mask"], self.labeled_dir)
                     t.update()
 
         return self.summarize_results()
 
-    def save_result_images(self, feed_dict: dict, pred: torch.Tensor, save_path: str) -> None:
+    def save_result_images(self, feed_dict: dict, pred: torch.Tensor, mask: torch.Tensor, save_path: str) -> None:
         """
         단일 배치의 추론 결과를 이미지 파일로 저장합니다.
 
         Args:
             feed_dict (dict): 데이터로더로부터 받은 원본 데이터 정보.
             pred (torch.Tensor): 모델의 예측 결과 텐서.
+            mask (torch.Tensor): 실제 정답 레이블 텐서.
             save_path (str): 이미지를 저장할 디렉토리 경로.
         """
         for i, (idx, image_path) in enumerate(zip(feed_dict["index"], feed_dict["image_path"])):
+            # Prediction
             p = pred[i].numpy()
             raw_image = np.array(Image.open(image_path).convert("RGB"))
-            canvas = get_canvas(raw_image, p, self.data_loader.dataset.class_colors)
-            canvas = Image.fromarray(canvas)
-            canvas.save(os.path.join(save_path, f"{idx}.png"))
+            pred_canvas = get_canvas(raw_image, p, self.data_loader.dataset.class_colors)
+            pred_canvas = Image.fromarray(pred_canvas)
+            pred_canvas.save(os.path.join(save_path, f"{idx}_pred.png"))
+
+            # Ground Truth
+            m = mask[i].numpy()
+            gt_canvas = get_canvas(raw_image, m, self.data_loader.dataset.class_colors)
+            gt_canvas = Image.fromarray(gt_canvas)
+            gt_canvas.save(os.path.join(save_path, f"{idx}_gt.png"))
+
 
     def summarize_results(self) -> dict[str, Any]:
         """
@@ -226,13 +240,13 @@ class Evaluator:
         results = {}
         if "calculate_miou" in self.tasks:
             # 참고: 아래 코드는 디버깅 목적으로 각 클래스의 IoU 정보를 상세히 출력합니다.
-            # print("\n--- IoU Debug Info ---")
-            # class_names = self.data_loader.dataset.classes
-            # union_sum = self.union_meter.sum.cpu().numpy()
-            # intersection_sum = self.intersection_meter.sum.cpu().numpy()
-            # for i, name in enumerate(class_names):
-            #     print(f"  - Class {i:02d} ({name:<25}): Union = {union_sum[i]}, Intersection = {intersection_sum[i]}")
-            # print("----------------------\n")
+            print("\n--- IoU Debug Info ---")
+            class_names = self.data_loader.dataset.classes
+            union_sum = self.union_meter.sum.cpu().numpy()
+            intersection_sum = self.intersection_meter.sum.cpu().numpy()
+            for i, name in enumerate(class_names):
+                print(f"  - Class {i:02d} ({name:<25}): Union = {union_sum[i]}, Intersection = {intersection_sum[i]}")
+            print("----------------------\n")
 
             iou_per_class = self.intersection_meter.sum / self.union_meter.sum
             # 합집합(union)이 0인 클래스는 mIoU 계산에서 제외하여 0으로 나누는 것을 방지합니다.

@@ -6,6 +6,8 @@
 """
 from typing import Callable, Optional
 
+import torch.nn as nn
+
 from efficientvit.models.efficientvit import (
     EfficientViTSeg,
     efficientvit_seg_b0,
@@ -17,8 +19,17 @@ from efficientvit.models.efficientvit import (
 )
 from efficientvit.models.nn.norm import set_norm_eps
 from efficientvit.models.utils import load_state_dict_from_file
+from efficientvit.models.segformer.model import (
+    segformer_b0,
+    segformer_b1,
+    segformer_b2,
+    segformer_b3,
+    segformer_b4,
+    segformer_b5,
+)
 
-__all__ = ["create_efficientvit_seg_model"]
+
+__all__ = ["create_efficientvit_seg_model", "create_segformer_model"]
 
 
 # 등록된 EfficientViT 세그멘테이션 모델 정보를 담고 있는 딕셔너리입니다.
@@ -59,6 +70,15 @@ REGISTERED_EFFICIENTVIT_SEG_MODEL: dict[str, tuple[Callable, float, str]] = {
         1e-7,
         "assets/checkpoints/efficientvit_seg/efficientvit_seg_l2_cityscapes.pt",
     ),
+}
+
+REGISTERED_SEGFORMER_MODEL: dict[str, tuple[Callable, float, Optional[str]]] = {
+    "segformer-b0": (segformer_b0, 1e-6, None), # Pretrained path is None for now
+    "segformer-b1": (segformer_b1, 1e-6, None),
+    "segformer-b2": (segformer_b2, 1e-6, None),
+    "segformer-b3": (segformer_b3, 1e-6, None),
+    "segformer-b4": (segformer_b4, 1e-6, None),
+    "segformer-b5": (segformer_b5, 1e-6, None),
 }
 
 
@@ -107,5 +127,47 @@ def create_efficientvit_seg_model(
         state_dict = load_state_dict_from_file(weight_path)
         model.load_state_dict(state_dict)
         
+    return model
+
+def create_segformer_model(
+    name: str,
+    pretrained: bool = True,
+    weight_url: Optional[str] = None,
+    n_classes: int = 19,
+    **kwargs,
+) -> nn.Module:
+    """
+    이름으로 SegFormer 모델을 생성하고, 선택적으로 사전 학습된 가중치를 로드합니다.
+
+    Args:
+        name (str): 생성할 모델의 이름 (예: "segformer-b0").
+                      `REGISTERED_SEGFORMER_MODEL`에 등록된 키여야 합니다.
+        pretrained (bool, optional): `True`이면 사전 학습된 가중치를 로드합니다. Defaults to True.
+        weight_url (Optional[str], optional): 사용할 가중치 파일의 경로.
+                                              `None`이면 등록된 기본 경로를 사용합니다. Defaults to None.
+        n_classes (int, optional): 출력 클래스의 수. Defaults to 19.
+        **kwargs: 모델 생성 함수에 전달될 추가 인자.
+
+    Returns:
+        nn.Module: 생성되고 가중치가 로드된 모델 객체.
+    """
+    if name not in REGISTERED_SEGFORMER_MODEL:
+        raise ValueError(f"Cannot find {name} in the model zoo. List of models: {list(REGISTERED_SEGFORMER_MODEL.keys())}")
+
+    model_builder, norm_eps, default_pt_path = REGISTERED_SEGFORMER_MODEL[name]
+
+    model = model_builder(num_classes=n_classes, **kwargs)
+
+    set_norm_eps(model, norm_eps)
+
+    if pretrained:
+        weight_path = weight_url or default_pt_path
+        if weight_path is None:
+            # 사전 학습된 가중치가 없어도 에러를 발생시키지 않고 경고만 출력
+            print(f"Warning: No pretrained weights available for {name} in the model zoo. The model is initialized randomly.")
+        else:
+            state_dict = load_state_dict_from_file(weight_path)
+            model.load_state_dict(state_dict)
+            
     return model
 

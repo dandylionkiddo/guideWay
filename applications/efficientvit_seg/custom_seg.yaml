@@ -1,13 +1,13 @@
 # model
 model:
-  name: efficientvit-seg-b0 # 모델 이름은 그대로 사용 (num_classes는 train.py에서 전달)
+  name: efficientvit-seg-b0 # 1. 모델 이름을 segformer-b0로 변경
 
-# data provider
+# data provider (데이터셋 설정은 그대로 유지)
 data_provider:
   task: seg
   dataset: mapillary 
   data_dir: D:\AIffel\EfficientViT\data\mapillary-vistas-dataset_public_v2.0 # \demo_training
-  n_classes: 18 # 새로운 클래스 수
+  n_classes: 19 # 새로운 클래스 수
   class_mapping_path: D:\AIffel\EfficientViT\efficientvit\applications\efficientvit_seg\custom_class_mapping.json # 클래스 매핑 파일 경로
 
   # SegDataProvider가 데이터셋 구조를 파악하는 데 사용하는 정보
@@ -19,12 +19,12 @@ data_provider:
   label_suffix: .png
 
   # 데이터로더 설정
-  base_batch_size: 64
-  test_batch_size: 64
+  base_batch_size: 8
+  test_batch_size: 8
   n_worker: 8
   image_size: 512
 
-# run config (필요에 따라 조절)
+# run config (SegFormer에 맞게 일부 하이퍼파라미터 조절)
 run_config:
   n_epochs: 500
   base_lr: 0.001
@@ -50,5 +50,6 @@ run_config:
 model_init:
   rand_init: trunc_normal
   last_gamma: 0.0
-  # 사전 학습된 가중치를 사용하되, head 부분은 랜덤 초기화되므로 finetuning과 유사하게 동작
-  backbone_init_from: D:\AIffel\EfficientViT\efficientvit\efficientvit\assets\checkpoints\efficientvit_seg\efficientvit_seg_b0_cityscapes.pt
+#   # 사전 학습된 가중치를 사용하되, head 부분은 랜덤 초기화되므로 finetuning과 유사하게 동작
+#   backbone_init_from: D:\AIffel\EfficientViT\efficientvit\efficientvit\assets\checkpoints\efficientvit_seg\efficientvit_seg_b0_cityscapes.pt
+  init_from: d:\AIffel\EfficientViT\efficientvit\output\from_runpod\checkpoint.pt
