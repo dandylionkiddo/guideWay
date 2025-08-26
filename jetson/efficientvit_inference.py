@@ -380,35 +380,84 @@ class OptimizedEfficientViTInference:
             # 올바른 import 방법
             from efficientvit.seg_model_zoo import create_efficientvit_seg_model
             
-            # 체크포인트 파일 경로 설정
-            checkpoint_path = "efficientvit/assets/checkpoints/efficientvit_seg/efficientvit_seg_b0_cityscapes.pt"
+            # # 체크포인트 파일 경로 설정
+            # checkpoint_path = "efficientvit/assets/checkpoints/efficientvit_seg/efficientvit_seg_b0_cityscapes.pt"
             
-            # 모델명 매핑 (참고 코드 기반)
-            model_mapping = {
-                'efficientvit_seg_b0': 'efficientvit-seg-b0-cityscapes',
-                'efficientvit_seg_b1': 'efficientvit-seg-b1-cityscapes', 
-                'efficientvit_seg_b2': 'efficientvit-seg-b2-cityscapes',
-                'efficientvit_seg_b3': 'efficientvit-seg-b3-cityscapes',
-                'efficientvit_seg_l1': 'efficientvit-seg-l1-cityscapes',
-                'efficientvit_seg_l2': 'efficientvit-seg-l2-cityscapes'
+            # # 모델명 매핑 (참고 코드 기반)
+            # model_mapping = {
+            #     'efficientvit_seg_b0': 'efficientvit-seg-b0',  # 수정된 부분
+            #     'efficientvit_seg_b1': 'efficientvit-seg-b1', 
+            #     'efficientvit_seg_b2': 'efficientvit-seg-b2',
+            #     'efficientvit_seg_b3': 'efficientvit-seg-b3',
+            #     'efficientvit_seg_l1': 'efficientvit-seg-l1',
+            #     'efficientvit_seg_l2': 'efficientvit-seg-l2'
+            # }
+            
+            # model_name_mapped = model_mapping.get(self.model_name, 'efficientvit-seg-b0')
+            
+            # # 체크포인트 파일이 있는지 확인하고 로컬에서 로드
+            # if os.path.exists(checkpoint_path):
+            #     print(f"✓ 체크포인트 파일 발견: {checkpoint_path}")
+            #     # 수정된 함수 호출 방식 (이미지 참고)
+            #     model = create_efficientvit_seg_model(
+            #         name=model_name_mapped,
+            #         dataset="cityscapes",  # 필수 인자 추가
+            #         weight_url=checkpoint_path,
+            #         n_classes=19  # Cityscapes 클래스 수
+            #     )
+            #     print(f"✓ 로컬 체크포인트에서 EfficientViT 모델 로딩 완료: {model_name_mapped}")
+            # else:
+            #     # 온라인에서 다운로드
+            #     print("온라인에서 모델 다운로드 중...")
+            #     model = create_efficientvit_seg_model(
+            #         name=model_name_mapped,
+            #         dataset="cityscapes",  # 필수 인자 추가
+            #         pretrained=True,
+            #         n_classes=19  # Cityscapes 클래스 수
+            #     )
+            #     print(f"✓ 온라인에서 EfficientViT 모델 로딩 완료: {model_name_mapped}")
+            # ✅ 수정: 모델별 체크포인트 파일 경로 매핑
+            checkpoint_mapping = {
+                'efficientvit_seg_b0': "efficientvit/assets/checkpoints/efficientvit_seg/efficientvit_seg_b0_cityscapes.pt",
+                'efficientvit_seg_b1': "efficientvit/assets/checkpoints/efficientvit_seg/efficientvit_seg_b1_cityscapes.pt",
+                'efficientvit_seg_b2': "efficientvit/assets/checkpoints/efficientvit_seg/efficientvit_seg_b2_cityscapes.pt", 
+                'efficientvit_seg_b3': "efficientvit/assets/checkpoints/efficientvit_seg/efficientvit_seg_b3_cityscapes.pt",
+                'efficientvit_seg_l1': "efficientvit/assets/checkpoints/efficientvit_seg/efficientvit_seg_l1_cityscapes.pt",
+                'efficientvit_seg_l2': "efficientvit/assets/checkpoints/efficientvit_seg/efficientvit_seg_l2_cityscapes.pt"
             }
             
-            model_name_mapped = model_mapping.get(self.model_name, 'efficientvit-seg-b0-cityscapes')
+            checkpoint_path = checkpoint_mapping.get(self.model_name)
+            
+            # 모델명 매핑 (수정된 부분)
+            model_mapping = {
+                'efficientvit_seg_b0': 'efficientvit-seg-b0',
+                'efficientvit_seg_b1': 'efficientvit-seg-b1', 
+                'efficientvit_seg_b2': 'efficientvit-seg-b2',
+                'efficientvit_seg_b3': 'efficientvit-seg-b3',
+                'efficientvit_seg_l1': 'efficientvit-seg-l1',
+                'efficientvit_seg_l2': 'efficientvit-seg-l2'  # ✅ l2 매핑 추가
+            }
+            
+            model_name_mapped = model_mapping.get(self.model_name, 'efficientvit-seg-b0')
             
             # 체크포인트 파일이 있는지 확인하고 로컬에서 로드
-            if os.path.exists(checkpoint_path):
+            if checkpoint_path and os.path.exists(checkpoint_path):
                 print(f"✓ 체크포인트 파일 발견: {checkpoint_path}")
                 model = create_efficientvit_seg_model(
                     name=model_name_mapped,
-                    weight_url=checkpoint_path
+                    dataset="cityscapes",
+                    weight_url=checkpoint_path,
+                    n_classes=19
                 )
                 print(f"✓ 로컬 체크포인트에서 EfficientViT 모델 로딩 완료: {model_name_mapped}")
             else:
-                # 온라인에서 다운로드
+                # ✅ 수정: 온라인에서 다운로드 (체크포인트 파일이 없을 때)
                 print("온라인에서 모델 다운로드 중...")
                 model = create_efficientvit_seg_model(
                     name=model_name_mapped,
-                    pretrained=True
+                    dataset="cityscapes",
+                    pretrained=True,
+                    n_classes=19
                 )
                 print(f"✓ 온라인에서 EfficientViT 모델 로딩 완료: {model_name_mapped}")
                 
@@ -417,7 +466,46 @@ class OptimizedEfficientViTInference:
         except Exception as e:
             print(f"EfficientViT 로딩 실패: {e}")
         
-        # # 방법 2: HuggingFace SegFormer 대안
+        # 방법 2: 커스텀 모델 경로 시도 (이미지에서 보인 경로)
+        if model is None:
+            try:
+                print("커스텀 모델 경로로 시도 중...")
+                from efficientvit.seg_model_zoo import create_efficientvit_seg_model
+                
+                # 이미지에서 본 경로 사용
+                custom_weight_path = "D:/Aiffel/efficientvit/efficientvit/output/from_runpod/model_best(1).pt"
+                
+                if os.path.exists(custom_weight_path):
+                    model = create_efficientvit_seg_model(
+                        name="efficientvit-seg-b0",
+                        dataset="cityscapes",
+                        weight_url=custom_weight_path,
+                        n_classes=18  # 이미지에서 본 클래스 수
+                    )
+                    print(f"✓ 커스텀 경로에서 모델 로딩 완료")
+                else:
+                    print(f"커스텀 가중치 파일을 찾을 수 없음: {custom_weight_path}")
+                    
+            except Exception as e:
+                print(f"커스텀 모델 로딩 실패: {e}")
+        
+        # 방법 3: 기본 사전 훈련된 모델 시도
+        if model is None:
+            try:
+                print("기본 사전 훈련된 모델로 시도 중...")
+                from efficientvit.seg_model_zoo import create_efficientvit_seg_model
+                
+                model = create_efficientvit_seg_model(
+                    name="efficientvit-seg-b0",
+                    dataset="cityscapes",
+                    pretrained=True
+                )
+                print("✓ 기본 사전 훈련된 모델 로딩 완료")
+                
+            except Exception as e:
+                print(f"기본 모델 로딩 실패: {e}")
+        
+        # # 방법 4: HuggingFace SegFormer 대안
         # if model is None:
         #     try:
         #         print("대안으로 HuggingFace에서 SegFormer 로딩 중...")
@@ -431,7 +519,7 @@ class OptimizedEfficientViTInference:
         #     except Exception as e:
         #         print(f"HuggingFace SegFormer 실패: {e}")
         
-        # # 방법 3: 최소 작동 모델 (최후의 수단)
+        # # 방법 5: 최소 작동 모델 (최후의 수단)
         # if model is None:
         #     print("최소 작동 모델 생성 중...")
             
@@ -484,10 +572,10 @@ class OptimizedEfficientViTInference:
             
         #     model = MinimalSegmentationModel(num_classes=19)
         #     print("✓ 최소 작동 모델 생성 완료")
-        #     print("⚠️  경고: 훈련되지 않은 최소 모델을 데모용으로 사용")
+        #     print("⚠️ 경고: 훈련되지 않은 최소 모델을 데모용으로 사용")
         
-        # if model is None:
-        #     raise RuntimeError("모든 모델 로딩 방법이 실패했습니다. 설치를 확인해주세요.")
+        if model is None:
+            raise RuntimeError("모든 모델 로딩 방법이 실패했습니다. 설치를 확인해주세요.")
         
         # 모델 최적화
         model = model.to(self.device)
@@ -518,34 +606,64 @@ class OptimizedEfficientViTInference:
         return input_tensor.to(self.device, non_blocking=True)
     
     def postprocess_output(self, output, original_shape):
-        """최적화된 출력 후처리"""
-        # GPU에서 직접 처리
+        # """최적화된 출력 후처리"""
+        # # GPU에서 직접 처리
+        # with torch.no_grad():
+        #     # 모델 출력이 딕셔너리인 경우 처리
+        #     if isinstance(output, dict):
+        #         for key in ['out', 'seg', 'logits']:
+        #             if key in output:
+        #                 logits = output[key]
+        #                 break
+        #         else:
+        #             # 첫 번째 값 사용
+        #             logits = list(output.values())[0]
+        #     else:
+        #         logits = output
+            
+        #     # 소프트맥스 및 argmax
+        #     probs = torch.softmax(logits, dim=1)
+        #     pred = torch.argmax(probs, dim=1).squeeze()
+            
+        #     # CPU로 이동하여 리사이즈
+        #     pred_cpu = pred.cpu().numpy().astype(np.uint8)
+            
+        # # 원본 크기로 리사이즈
+        # pred_resized = cv2.resize(pred_cpu, 
+        #                         (original_shape[1], original_shape[0]), 
+        #                         interpolation=cv2.INTER_NEAREST)
+        #                         # interpolation=cv2.INTER_LINEAR)  # 더 부드러운 보간 -> 클래스 경계에서 잘못된 중간값들이 생성됨 (실패)
+        
+        # return pred_resized
+        """부드러운 세그멘테이션을 위한 개선된 출력 후처리"""
         with torch.no_grad():
-            # 모델 출력이 딕셔너리인 경우 처리
+            # 모델 출력 처리
             if isinstance(output, dict):
                 for key in ['out', 'seg', 'logits']:
                     if key in output:
                         logits = output[key]
                         break
                 else:
-                    # 첫 번째 값 사용
                     logits = list(output.values())[0]
             else:
                 logits = output
             
+            # 🔥 핵심 개선: GPU에서 바로 원본 크기로 업샘플링
+            upsampled_logits = torch.nn.functional.interpolate(
+                logits, 
+                size=original_shape[:2], 
+                mode='bilinear', 
+                align_corners=False
+            )
+            
             # 소프트맥스 및 argmax
-            probs = torch.softmax(logits, dim=1)
+            probs = torch.softmax(upsampled_logits, dim=1)
             pred = torch.argmax(probs, dim=1).squeeze()
             
-            # CPU로 이동하여 리사이즈
+            # CPU로 이동
             pred_cpu = pred.cpu().numpy().astype(np.uint8)
-            
-        # 원본 크기로 리사이즈
-        pred_resized = cv2.resize(pred_cpu, 
-                                (original_shape[1], original_shape[0]), 
-                                interpolation=cv2.INTER_NEAREST)
         
-        return pred_resized
+        return pred_cpu
     
     def create_mask_visualization(self, segmentation_mask):
         """마스크만으로 구성된 시각화 생성"""
@@ -662,7 +780,13 @@ class OptimizedEfficientViTInference:
     
     def process_video_optimized(self, input_path, output_path, save_frames=False, save_masks=False,
                               show_stats=True, multithreading=True):
-        """최적화된 비디오 처리"""
+        # """최적화된 비디오 처리"""
+        # cap = cv2.VideoCapture(input_path)
+        """최적화된 비디오 처리 - save_masks가 True면 마스크만, False면 오버레이만 출력"""
+        
+        # save_masks 옵션에 따라 출력 모드 결정
+        masks_only = save_masks
+        
         cap = cv2.VideoCapture(input_path)
         
         # 비디오 정보
@@ -677,28 +801,37 @@ class OptimizedEfficientViTInference:
         print(f"Total frames: {total_frames}")
         print(f"Duration: {total_frames/fps:.1f} seconds")
         print(f"Multithreading: {multithreading}")
+        print(f"Output mode: {'Masks only' if masks_only else 'Overlay'}")  # 🔥 모드 표시
         
         # 출력 비디오 설정
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
         out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
         
-        # 마스크 비디오 출력 설정 (save_masks가 True인 경우)
-        mask_out = None
-        if save_masks:
-            mask_output_path = output_path.replace('.mp4', '_masks.mp4')
-            mask_out = cv2.VideoWriter(mask_output_path, fourcc, fps, (width, height))
-            print(f"Mask video will be saved to: {mask_output_path}")
+        # # 마스크 비디오 출력 설정 (save_masks가 True인 경우)
+        # mask_out = None
+        # if save_masks:
+        #     mask_output_path = output_path.replace('.mp4', '_masks.mp4')
+        #     mask_out = cv2.VideoWriter(mask_output_path, fourcc, fps, (width, height))
+        #     print(f"Mask video will be saved to: {mask_output_path}")
         
         # 프레임/마스크 저장 디렉토리
-        if save_frames or save_masks:
-            if save_frames:
+        # if save_frames or save_masks:
+        #     if save_frames:
+        #         frames_dir = Path("output_frames")
+        #         frames_dir.mkdir(exist_ok=True)
+        #     if save_masks:
+        #         masks_dir = Path("output_masks")
+        #         masks_dir.mkdir(exist_ok=True)
+        #         # 클래스 범례 저장
+        #         self.save_mask_legend(masks_dir)
+        if save_frames:
+            if masks_only:
+                frames_dir = Path("output_masks")
+                frames_dir.mkdir(exist_ok=True)
+                self.save_mask_legend(frames_dir)
+            else:
                 frames_dir = Path("output_frames")
                 frames_dir.mkdir(exist_ok=True)
-            if save_masks:
-                masks_dir = Path("output_masks")
-                masks_dir.mkdir(exist_ok=True)
-                # 클래스 범례 저장
-                self.save_mask_legend(masks_dir)
         
         # 통계 변수
         inference_times = []
@@ -735,12 +868,20 @@ class OptimizedEfficientViTInference:
                         while expected_frame in frame_buffer:
                             frame, seg_mask, inf_time = frame_buffer.pop(expected_frame)
                             
-                            # 오버레이 생성 (원본 + 마스크)
-                            overlay, class_info = self.create_enhanced_overlay(frame, seg_mask)
+                            # # 오버레이 생성 (원본 + 마스크)
+                            # overlay, class_info = self.create_enhanced_overlay(frame, seg_mask)
                             
-                            # 마스크만 생성 (save_masks 옵션)
-                            if save_masks or mask_out:
-                                mask_only, _ = self.create_mask_visualization(seg_mask)
+                            # # 마스크만 생성 (save_masks 옵션)
+                            # if save_masks or mask_out:
+                            #     mask_only, _ = self.create_mask_visualization(seg_mask)
+                            # 🔥 핵심 수정: masks_only에 따라 다른 처리
+                            if masks_only:
+                                # 마스크만 생성
+                                # final_output, class_info = self.create_mask_visualization(seg_mask)
+                                final_output, class_info = self.create_opencv_bitwise_mask_visualization(seg_mask)
+                            else:
+                                # 오버레이 생성 (기존 동작)
+                                final_output, class_info = self.create_enhanced_overlay(frame, seg_mask)
                             
                             # 통계 정보 추가
                             for class_name, count in class_info.items():
@@ -748,25 +889,40 @@ class OptimizedEfficientViTInference:
                                     class_statistics[class_name] = []
                                 class_statistics[class_name].append(count)
                             
-                            # 성능 정보 표시
-                            if show_stats:
+                            # # 성능 정보 표시
+                            # if show_stats:
+                            #     fps_text = f"FPS: {1/inf_time:.1f}"
+                            #     model_text = f"Model: {self.model_name}"
+                            #     cv2.putText(overlay, fps_text, (10, 30), 
+                            #                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+                            #     cv2.putText(overlay, model_text, (10, 60), 
+                            #                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+                            # 성능 정보 표시 (오버레이 모드일 때만, 마스크 모드일 때는 표시하지 않음)
+                            if show_stats and not masks_only:
                                 fps_text = f"FPS: {1/inf_time:.1f}"
                                 model_text = f"Model: {self.model_name}"
-                                cv2.putText(overlay, fps_text, (10, 30), 
-                                           cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-                                cv2.putText(overlay, model_text, (10, 60), 
-                                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+                                cv2.putText(final_output, fps_text, (10, 30), 
+                                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+                                cv2.putText(final_output, model_text, (10, 60), 
+                                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
                             
-                            # 비디오 저장
-                            out.write(overlay)
-                            if mask_out is not None:
-                                mask_out.write(mask_only)
+                            # # 비디오 저장
+                            # out.write(overlay)
+                            # if mask_out is not None:
+                            #     mask_out.write(mask_only)
+                            # 🔥 비디오 저장 - 메인 출력
+                            out.write(final_output)
                             
                             # 개별 프레임/마스크 저장
+                            # if save_frames:
+                            #     cv2.imwrite(str(frames_dir / f"frame_{expected_frame:06d}.jpg"), overlay)
+                            # if save_masks:
+                            #     cv2.imwrite(str(masks_dir / f"mask_{expected_frame:06d}.png"), mask_only)
                             if save_frames:
-                                cv2.imwrite(str(frames_dir / f"frame_{expected_frame:06d}.jpg"), overlay)
-                            if save_masks:
-                                cv2.imwrite(str(masks_dir / f"mask_{expected_frame:06d}.png"), mask_only)
+                                if masks_only:
+                                    cv2.imwrite(str(frames_dir / f"mask_{expected_frame:06d}.png"), final_output)
+                                else:
+                                    cv2.imwrite(str(frames_dir / f"frame_{expected_frame:06d}.jpg"), final_output)
                             
                             expected_frame += 1
                             processed_frames += 1
@@ -790,7 +946,7 @@ class OptimizedEfficientViTInference:
                 pbar.close()
         
         else:
-            # 단일 스레드 처리 (안정성 우선)
+            # 단일 스레드 처리 (안정성 우선)# 🔥 단일 스레드 처리 부분도 동일하게 수정
             pbar = tqdm(total=total_frames, desc="Processing")
             
             for frame_idx in range(total_frames):
@@ -809,12 +965,18 @@ class OptimizedEfficientViTInference:
                 inference_time = time.time() - start_time
                 inference_times.append(inference_time)
                 
-                # 오버레이 생성 (원본 + 마스크)
-                overlay, class_info = self.create_enhanced_overlay(frame, segmentation_mask)
+                # # 오버레이 생성 (원본 + 마스크)
+                # overlay, class_info = self.create_enhanced_overlay(frame, segmentation_mask)
                 
-                # 마스크만 생성 (save_masks 옵션)
-                if save_masks or mask_out:
-                    mask_only, _ = self.create_mask_visualization(segmentation_mask)
+                # # 마스크만 생성 (save_masks 옵션)
+                # if save_masks or mask_out:
+                #     mask_only, _ = self.create_mask_visualization(segmentation_mask)
+                # 🔥 masks_only에 따라 다른 처리
+                if masks_only:
+                    # final_output, class_info = self.create_mask_visualization(segmentation_mask)
+                    final_output, class_info = self.create_opencv_bitwise_mask_visualization(segmentation_mask)
+                else:
+                    final_output, class_info = self.create_enhanced_overlay(frame, segmentation_mask)
                 
                 # 통계 수집
                 for class_name, count in class_info.items():
@@ -822,25 +984,39 @@ class OptimizedEfficientViTInference:
                         class_statistics[class_name] = []
                     class_statistics[class_name].append(count)
                 
-                # 성능 정보 표시
-                if show_stats:
+                # # 성능 정보 표시
+                # if show_stats:
+                #     fps_text = f"FPS: {1/inference_time:.1f}"
+                #     model_text = f"Model: {self.model_name}"
+                #     cv2.putText(overlay, fps_text, (10, 30), 
+                #                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+                #     cv2.putText(overlay, model_text, (10, 60), 
+                #                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+                # 성능 정보 표시 (마스크 모드일 때는 표시하지 않음)
+                if show_stats and not masks_only:
                     fps_text = f"FPS: {1/inference_time:.1f}"
                     model_text = f"Model: {self.model_name}"
-                    cv2.putText(overlay, fps_text, (10, 30), 
-                               cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-                    cv2.putText(overlay, model_text, (10, 60), 
-                               cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+                    cv2.putText(final_output, fps_text, (10, 30), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+                    cv2.putText(final_output, model_text, (10, 60), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
                 
-                # 비디오 저장
-                out.write(overlay)
-                if mask_out is not None:
-                    mask_out.write(mask_only)
+                # # 비디오 저장
+                # out.write(overlay)
+                # 🔥 비디오 저장
+                out.write(final_output)
                 
-                # 개별 프레임/마스크 저장
+                # # 개별 프레임/마스크 저장
+                # if save_frames:
+                #     cv2.imwrite(str(frames_dir / f"frame_{frame_idx:06d}.jpg"), overlay)
+                # if save_masks:
+                #     cv2.imwrite(str(masks_dir / f"mask_{frame_idx:06d}.png"), mask_only)
+                # 개별 프레임 저장
                 if save_frames:
-                    cv2.imwrite(str(frames_dir / f"frame_{frame_idx:06d}.jpg"), overlay)
-                if save_masks:
-                    cv2.imwrite(str(masks_dir / f"mask_{frame_idx:06d}.png"), mask_only)
+                    if masks_only:
+                        cv2.imwrite(str(frames_dir / f"mask_{frame_idx:06d}.png"), final_output)
+                    else:
+                        cv2.imwrite(str(frames_dir / f"frame_{frame_idx:06d}.jpg"), final_output)
                 
                 pbar.update(1)
                 
@@ -854,16 +1030,25 @@ class OptimizedEfficientViTInference:
         # 리소스 정리
         cap.release()
         out.release()
-        if mask_out is not None:
-            mask_out.release()
+        # if mask_out is not None:
+        #     mask_out.release()
         
         # 성능 통계 출력
+        # self.print_performance_stats(inference_times, class_statistics, total_frames, output_path)
+        mode_text = "Masks Only" if masks_only else "Overlay"
+        print(f"\n=== {mode_text} Processing Completed ===")
         self.print_performance_stats(inference_times, class_statistics, total_frames, output_path)
         
-        if save_masks:
-            print(f"✓ Mask video saved to: {mask_output_path}")
-            print(f"✓ Individual masks saved to: output_masks/")
-            print(f"✓ Class legend saved to: output_masks/class_legend.png")
+        # if save_masks:
+        #     print(f"✓ Mask video saved to: {mask_output_path}")
+        #     print(f"✓ Individual masks saved to: output_masks/")
+        #     print(f"✓ Class legend saved to: output_masks/class_legend.png")
+        if save_frames:
+            if masks_only:
+                print(f"✓ Individual masks saved to: output_masks/")
+                print(f"✓ Class legend saved to: output_masks/class_legend.png")
+            else:
+                print(f"✓ Individual frames saved to: output_frames/")
     
     def print_performance_stats(self, inference_times, class_statistics, total_frames, output_path):
         """성능 통계 출력"""
@@ -1048,6 +1233,38 @@ class OptimizedEfficientViTInference:
             print(f"{i:2d}: {class_name:15s} -> {color_name:12s} {rgb_str}")
         print()
 
+    # def create_minimal_mask_visualization(self, segmentation_mask):
+    #     """최소한의 연산으로 마스크 생성"""
+        
+    #     # 🚀 가장 단순한 방식 (기존과 거의 동일하지만 최적화)
+    #     colored_mask = self.class_colors[segmentation_mask % len(self.class_colors)]
+    #     colored_mask = colored_mask[..., ::-1]  # RGB -> BGR
+        
+    #     # 통계 생략
+    #     return colored_mask, {}
+    def create_opencv_bitwise_mask_visualization(self, segmentation_mask):
+        """OpenCV bitwise 연산 활용 - 매우 빠름!"""
+        
+        h, w = segmentation_mask.shape
+        result = np.zeros((h, w, 3), dtype=np.uint8)
+        
+        for class_id in range(len(self.class_colors)):
+            # 클래스 마스크 생성
+            class_mask = (segmentation_mask == class_id).astype(np.uint8) * 255
+            
+            if np.any(class_mask):
+                # 색상 이미지 생성
+                color_bgr = self.class_colors[class_id][::-1]
+                color_img = np.full((h, w, 3), color_bgr, dtype=np.uint8)
+                
+                # 🚀 OpenCV bitwise_and 사용 (하드웨어 최적화!)
+                masked_color = cv2.bitwise_and(color_img, color_img, mask=class_mask)
+                
+                # 🚀 OpenCV bitwise_or로 합성
+                result = cv2.bitwise_or(result, masked_color)
+        
+        return result, {}
+
 def main():
     parser = argparse.ArgumentParser(description="Optimized EfficientViT Segmentation for Jetson")
     parser.add_argument("--input", "-i", required=True, help="Input video path")
@@ -1056,8 +1273,10 @@ def main():
                        choices=list(EfficientViTModelManager.AVAILABLE_MODELS.keys()),
                        help="EfficientViT model name")
     parser.add_argument("--device", "-d", default="cuda", help="Device (cuda/cpu)")
-    parser.add_argument("--save-frames", action="store_true", help="Save individual overlay frames")
-    parser.add_argument("--save-masks", action="store_true", help="Save individual mask frames and mask video")
+    # parser.add_argument("--save-frames", action="store_true", help="Save individual overlay frames")
+    parser.add_argument("--save-frames", action="store_true", help="Save individual frames")
+    # parser.add_argument("--save-masks", action="store_true", help="Save individual mask frames and mask video")
+    parser.add_argument("--save-masks", action="store_true", help="Output masks only (instead of overlay)")
     parser.add_argument("--no-optimize", action="store_true", help="Skip Jetson optimization")
     parser.add_argument("--single-thread", action="store_true", help="Use single thread processing")
     parser.add_argument("--list-models", action="store_true", help="List available models")
