@@ -63,15 +63,18 @@ class DataProvider:
         self.valid_size = valid_size
 
         # image size
-        if isinstance(image_size, list):
+        if isinstance(image_size, list) and len(image_size) == 2 and all(isinstance(x, int) for x in image_size):
+            self.image_size = tuple(image_size) # e.g., [512, 1024] -> (512, 1024)
+        elif isinstance(image_size, list):
+            # This path is for RRS, which we are not using for now.
             self.image_size = [parse_image_size(size) for size in image_size]
             self.image_size.sort()  # e.g., 160 -> 224
-            RRSController.IMAGE_SIZE_LIST = copy.deepcopy(self.image_size)
-            self.active_image_size = RRSController.ACTIVE_SIZE = self.image_size[-1]
         else:
-            self.image_size = parse_image_size(image_size)
-            RRSController.IMAGE_SIZE_LIST = [self.image_size]
-            self.active_image_size = RRSController.ACTIVE_SIZE = self.image_size
+            self.image_size = parse_image_size(image_size) # e.g., 512 -> (512, 512)
+
+        # RRS is not used, so set controller to a single resolution
+        RRSController.IMAGE_SIZE_LIST = [self.image_size]
+        self.active_image_size = RRSController.ACTIVE_SIZE = self.image_size
 
         # distributed configs
         self.num_replicas = num_replicas

@@ -6,7 +6,8 @@ model:
 data_provider:
   task: seg
   dataset: mapillary 
-  data_dir: D:\AIffel\EfficientViT\data\mapillary-vistas-dataset_public_v2.0 # \demo_training
+  # data_dir: D:\AIffel\EfficientViT\data\mapillary-vistas-dataset_public_v2.0
+  data_dir: D:\AIffel\EfficientViT\data\mapillary-vistas-dataset_public_v2.0\demo_training # \demo_training
   n_classes: 19 # 새로운 클래스 수
   class_mapping_path: D:\AIffel\EfficientViT\efficientvit\applications\efficientvit_seg\custom_class_mapping.json # 클래스 매핑 파일 경로
 
@@ -22,7 +23,7 @@ data_provider:
   base_batch_size: 8
   test_batch_size: 8
   n_worker: 8
-  image_size: 512
+  image_size: 512 # [height, width] 직사각형 해상도 설정
 
 # run config (SegFormer에 맞게 일부 하이퍼파라미터 조절)
 run_config:

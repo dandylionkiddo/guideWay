@@ -102,34 +102,58 @@ class SegRandomHorizontalFlip:
 
 class SegRandomResizedCrop:
     """이미지와 레이블에 대해 랜덤 리사이즈 및 크롭을 적용합니다."""
-    def __init__(self, size: int, scale: tuple[float, float] = (0.5, 2.0)):
-        self.size = (size, size)
+
+    def __init__(self, size: int | list[int] | tuple[int, int], scale: tuple[float, float] = (0.5, 2.0)):
+        if isinstance(size, int):
+            self.size = [size, size]
+        else:
+            self.size = list(size)
         self.scale = scale
 
     def __call__(self, sample: Dict[str, Any]) -> Dict[str, Any]:
-        i, j, h, w = transforms.RandomResizedCrop.get_params(sample['image'], self.scale, ratio=(0.75, 1.33))
-        sample['image'] = F.resized_crop(sample['image'], i, j, h, w, self.size, transforms.InterpolationMode.BILINEAR)
-        sample['label'] = F.resized_crop(sample['label'], i, j, h, w, self.size, transforms.InterpolationMode.NEAREST)
+        i, j, h, w = transforms.RandomResizedCrop.get_params(
+            sample["image"], self.scale, ratio=(0.75, 1.33)
+        )
+        sample["image"] = F.resized_crop(
+            sample["image"], i, j, h, w, self.size, transforms.InterpolationMode.BILINEAR
+        )
+        sample["label"] = F.resized_crop(
+            sample["label"], i, j, h, w, self.size, transforms.InterpolationMode.NEAREST
+        )
         return sample
+
 
 class SegResize:
     """이미지와 레이블을 주어진 크기로 리사이즈합니다."""
-    def __init__(self, size: int):
-        self.size = (size, size)
+
+    def __init__(self, size: int | list[int] | tuple[int, int]):
+        if isinstance(size, int):
+            self.size = [size, size]
+        else:
+            self.size = list(size)
 
     def __call__(self, sample: Dict[str, Any]) -> Dict[str, Any]:
-        sample['image'] = F.resize(sample['image'], self.size, transforms.InterpolationMode.BILINEAR)
-        sample['label'] = F.resize(sample['label'], self.size, transforms.InterpolationMode.NEAREST)
+        sample["image"] = F.resize(
+            sample["image"], self.size, transforms.InterpolationMode.BILINEAR
+        )
+        sample["label"] = F.resize(
+            sample["label"], self.size, transforms.InterpolationMode.NEAREST
+        )
         return sample
+
 
 class SegCenterCrop:
     """이미지와 레이블의 중앙을 크롭합니다."""
-    def __init__(self, size: int):
-        self.size = (size, size)
+
+    def __init__(self, size: int | list[int] | tuple[int, int]):
+        if isinstance(size, int):
+            self.size = [size, size]
+        else:
+            self.size = list(size)
 
     def __call__(self, sample: Dict[str, Any]) -> Dict[str, Any]:
-        sample['image'] = F.center_crop(sample['image'], self.size)
-        sample['label'] = F.center_crop(sample['label'], self.size)
+        sample["image"] = F.center_crop(sample["image"], self.size)
+        sample["label"] = F.center_crop(sample["label"], self.size)
         return sample
 
 class SegmentationDataset(Dataset):
