@@ -42,34 +42,40 @@ def segformer_b0(num_classes=19, **kwargs):
     return SegFormer(
         embed_dims=[32, 64, 160, 256], num_heads=[1, 2, 5, 8], mlp_ratios=[4, 4, 4, 4],
         qkv_bias=True, depths=[2, 2, 2, 2], sr_ratios=[8, 4, 2, 1],
-        num_classes=num_classes, **kwargs)
+        # num_classes=num_classes, **kwargs)
+        num_classes=num_classes, embedding_dim=256, **kwargs)  # 256
 
 def segformer_b1(num_classes=19, **kwargs):
     return SegFormer(
         embed_dims=[64, 128, 320, 512], num_heads=[1, 2, 5, 8], mlp_ratios=[4, 4, 4, 4],
         qkv_bias=True, depths=[2, 2, 2, 2], sr_ratios=[8, 4, 2, 1],
-        num_classes=num_classes, **kwargs)
+        # num_classes=num_classes, **kwargs)
+        num_classes=num_classes, embedding_dim=256, **kwargs)  # 256
 
 def segformer_b2(num_classes=19, **kwargs):
     return SegFormer(
         embed_dims=[64, 128, 320, 512], num_heads=[1, 2, 5, 8], mlp_ratios=[4, 4, 4, 4],
         qkv_bias=True, depths=[3, 4, 6, 3], sr_ratios=[8, 4, 2, 1],
-        num_classes=num_classes, **kwargs)
+        # num_classes=num_classes, **kwargs)
+        num_classes=num_classes, embedding_dim=768, **kwargs)  # 768로 변경
 
 def segformer_b3(num_classes=19, **kwargs):
     return SegFormer(
         embed_dims=[64, 128, 320, 512], num_heads=[1, 2, 5, 8], mlp_ratios=[4, 4, 4, 4],
         qkv_bias=True, depths=[3, 4, 18, 3], sr_ratios=[8, 4, 2, 1],
-        num_classes=num_classes, **kwargs)
+        # num_classes=num_classes, **kwargs)
+        num_classes=num_classes, embedding_dim=768, **kwargs)  # 768로 변경
 
 def segformer_b4(num_classes=19, **kwargs):
     return SegFormer(
         embed_dims=[64, 128, 320, 512], num_heads=[1, 2, 5, 8], mlp_ratios=[4, 4, 4, 4],
         qkv_bias=True, depths=[3, 8, 27, 3], sr_ratios=[8, 4, 2, 1],
-        num_classes=num_classes, **kwargs)
+        # num_classes=num_classes, **kwargs)
+        num_classes=num_classes, embedding_dim=768, **kwargs)  # 768로 변경
 
 def segformer_b5(num_classes=19, **kwargs):
     return SegFormer(
         embed_dims=[64, 128, 320, 512], num_heads=[1, 2, 5, 8], mlp_ratios=[4, 4, 4, 4],
         qkv_bias=True, depths=[3, 6, 40, 3], sr_ratios=[8, 4, 2, 1],
-        num_classes=num_classes, **kwargs)
+        # num_classes=num_classes, **kwargs)
+        num_classes=num_classes, embedding_dim=768, **kwargs)  # 768로 변경
