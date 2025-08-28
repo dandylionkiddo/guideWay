@@ -58,10 +58,33 @@ class SegTrainer(Trainer):
             model=model,
             data_provider=data_provider,
         )
-        # 세그멘테이션의 손실 함수로 CrossEntropyLoss를 사용합니다.
-        # `ignore_index=255`는 레이블 값이 255인 픽셀을 손실 계산에서 제외시킵니다.
-        self.criterion = nn.CrossEntropyLoss(ignore_index=255)
         self.n_classes = data_provider.n_classes
+
+    def prep_for_training(self, run_config: Any, ema_decay: float | None = None, amp: str = "fp32") -> None:
+        super().prep_for_training(run_config, ema_decay, amp)
+
+        # Loss 함수를 설정합니다.
+        loss_config = self.run_config.loss
+        if loss_config['name'] == "focal":
+            from efficientvit.models.nn.loss import FocalLoss
+
+            self.criterion = FocalLoss(
+                alpha=loss_config.get("focal_loss_alpha", 0.25),
+                gamma=loss_config.get("focal_loss_gamma", 2.0),
+                ignore_index=255,
+            )
+            if is_master():
+                self.write_log("Using Focal Loss")
+        elif loss_config['name'] == "dice":
+            from efficientvit.models.nn.loss import DiceLoss
+
+            self.criterion = DiceLoss(n_classes=self.n_classes)
+            if is_master():
+                self.write_log("Using Dice Loss")
+        else:
+            self.criterion = nn.CrossEntropyLoss(ignore_index=255)
+            if is_master():
+                self.write_log("Using Cross Entropy Loss")
 
     def before_step(self, sample: dict[str, Any]) -> dict[str, torch.Tensor]:
         """

@@ -26,7 +26,7 @@ data_provider:
 
 # run config (SegFormer에 맞게 일부 하이퍼파라미터 조절)
 run_config:
-  n_epochs: 500
+  n_epochs: 10
   base_lr: 0.001
   warmup_epochs: 10
   warmup_lr: 0.0
@@ -45,6 +45,11 @@ run_config:
   eval_image_size: [512]
   early_stopping_patience: 10
   early_stopping_metric: val_miou 
+  # Loss Function
+  loss:
+    name: 'focal' # 'cross_entropy', 'focal', or 'dice'
+    # focal_loss_alpha: 0.25 # Optional: for focal loss
+    # focal_loss_gamma: 2.0 # Optional: for focal loss
 
 # model init
 model_init:
@@ -52,4 +57,4 @@ model_init:
   last_gamma: 0.0
 #   # 사전 학습된 가중치를 사용하되, head 부분은 랜덤 초기화되므로 finetuning과 유사하게 동작
 #   backbone_init_from: D:\AIffel\EfficientViT\efficientvit\efficientvit\assets\checkpoints\efficientvit_seg\efficientvit_seg_b0_cityscapes.pt
-  init_from: d:\AIffel\EfficientViT\efficientvit\output\from_runpod\checkpoint.pt
+  # init_from: d:\AIffel\EfficientViT\efficientvit\output\from_runpod\checkpoint.pt
