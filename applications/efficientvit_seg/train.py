@@ -119,6 +119,7 @@ def main() -> None:
         path=args.path,
         model=model,
         data_provider=data_provider,
+        # run_config=run_config,  # run_config 전달
     )
 
     # 8. 학습 시작
