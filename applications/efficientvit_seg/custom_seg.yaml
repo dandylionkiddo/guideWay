@@ -23,7 +23,7 @@ data_provider:
   base_batch_size: 8
   test_batch_size: 8
   n_worker: 8
-  image_size: 512 # [height, width] 직사각형 해상도 설정
+  image_size: [[512, 512]] # [height, width] 직사각형 해상도 설정
 
 # run config (SegFormer에 맞게 일부 하이퍼파라미터 조절)
 run_config:

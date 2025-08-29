@@ -326,9 +326,7 @@ def _worker_loop(
                 # processing steps.
                 continue
             idx, index = r
-            """ Added """
             RRSController.sample_resolution(batch_id=idx)
-            """ Added """
             data: Union[_IterableDatasetStopIteration, ExceptionWrapper]
             if init_exception is not None:
                 data = init_exception
