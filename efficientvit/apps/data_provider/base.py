@@ -10,6 +10,17 @@ from efficientvit.models.utils import val2tuple
 
 __all__ = ["parse_image_size", "random_drop_data", "DataProvider"]
 
+def init_rrs_worker(_id):
+    """전역 worker_init_fn: Windows spawn 대응"""
+    # DataProvider 인스턴스의 _rrs_choice_list는 접근 불가 → 전역 변수에서 가져오도록 함
+    global _GLOBAL_RRS_CHOICE_LIST, _GLOBAL_IMAGE_SIZE
+    if "_GLOBAL_RRS_CHOICE_LIST" in globals():
+        RRSController.CHOICE_LIST = list(_GLOBAL_RRS_CHOICE_LIST)
+        RRSController.ACTIVE_SIZE = RRSController.CHOICE_LIST[0]
+    elif "_GLOBAL_IMAGE_SIZE" in globals():
+        RRSController.CHOICE_LIST = list(_GLOBAL_IMAGE_SIZE)
+        RRSController.ACTIVE_SIZE = RRSController.CHOICE_LIST[0]
+
 
 def parse_image_size(size: int | str) -> tuple[int, int]:
     if isinstance(size, str):
@@ -63,15 +74,21 @@ class DataProvider:
         self.valid_size = valid_size
 
         # image size
-        if isinstance(image_size, list):
-            self.image_size = [parse_image_size(size) for size in image_size]
-            self.image_size.sort()  # e.g., 160 -> 224
-            RRSController.IMAGE_SIZE_LIST = copy.deepcopy(self.image_size)
-            self.active_image_size = RRSController.ACTIVE_SIZE = self.image_size[-1]
+        is_list_of_tuples = isinstance(image_size, list) and all(isinstance(x, (list, tuple)) for x in image_size)
+
+        if is_list_of_tuples:
+            # Case 1: RRS with multiple resolutions
+            self.image_size = [tuple(size) for size in image_size]
+            self.image_size.sort(key=lambda x: x[0] * x[1])
+        elif isinstance(image_size, list):
+            # Case 2: Single non-square resolution
+            self.image_size = tuple(image_size)
         else:
+            # Case 3: Single square resolution
             self.image_size = parse_image_size(image_size)
-            RRSController.IMAGE_SIZE_LIST = [self.image_size]
-            self.active_image_size = RRSController.ACTIVE_SIZE = self.image_size
+
+        RRSController.IMAGE_SIZE_LIST = [self.image_size] if not is_list_of_tuples else copy.deepcopy(self.image_size)
+        self.active_image_size = RRSController.ACTIVE_SIZE = RRSController.IMAGE_SIZE_LIST[-1]
 
         # distributed configs
         self.num_replicas = num_replicas
@@ -113,28 +130,39 @@ class DataProvider:
     def build_dataloader(self, dataset: Optional[Any], batch_size: int, n_worker: int, drop_last: bool, train: bool):
         if dataset is None:
             return None
-        if isinstance(self.image_size, list) and train:
+        use_rrs = isinstance(self.image_size, list) and train
+        if use_rrs:
             from efficientvit.apps.data_provider.random_resolution._data_loader import RRSDataLoader
 
             dataloader_class = RRSDataLoader
+            common = dict(
+                dataset=dataset,
+                batch_size=batch_size,
+                num_workers=n_worker,
+                pin_memory=True,
+                pin_memory_device="cuda",
+                persistent_workers=False,
+                prefetch_factor=(4 if n_worker > 0 else None),
+                drop_last=drop_last,
+            )
+            common["worker_init_fn"] = init_rrs_worker
+            
         else:
             dataloader_class = torch.utils.data.DataLoader
-
-        # 공통 옵션
-        common = dict(
-            dataset=dataset,
-            batch_size=batch_size,
-            num_workers=n_worker,
-            pin_memory=True,
-            pin_memory_device="cuda",        # PyTorch 2.x
-            persistent_workers=True,         # 워커 생존
-            prefetch_factor=4,               # 워커당 프리패치
-            drop_last=drop_last,
-        )
+            common = dict(
+                dataset=dataset,
+                batch_size=batch_size,
+                num_workers=n_worker,
+                pin_memory=True,
+                pin_memory_device="cuda",
+                persistent_workers=True,
+                prefetch_factor=(4 if n_worker > 0 else None),
+                drop_last=drop_last,
+            )
 
         if self.num_replicas is None:
             return dataloader_class(
-                shuffle=train,               # 검증/테스트는 False
+                shuffle=train,
                 **common,
             )
         else:
@@ -146,6 +174,24 @@ class DataProvider:
 
     def set_epoch(self, epoch: int) -> None:
         RRSController.set_epoch(epoch, len(self.train))
+
+        if isinstance(self.image_size, list):  # RRS 모드
+            import random
+            num_batches = len(self.train)
+            candidates = list(self.image_size)
+            extra = max(4, num_batches // 10)
+            self._rrs_choice_list = [
+                random.choice(candidates) for _ in range(num_batches + extra)
+            ]
+            RRSController.CHOICE_LIST = self._rrs_choice_list
+            RRSController.ACTIVE_SIZE = self._rrs_choice_list[0]
+
+            # 🔽 전역 변수에 등록해서 워커도 쓸 수 있게 함
+            global _GLOBAL_RRS_CHOICE_LIST
+            _GLOBAL_RRS_CHOICE_LIST = self._rrs_choice_list
+            global _GLOBAL_IMAGE_SIZE
+            _GLOBAL_IMAGE_SIZE = self.image_size
+
         if isinstance(self.train.sampler, DistributedSampler):
             self.train.sampler.set_epoch(epoch)
 

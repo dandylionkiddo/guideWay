@@ -21,8 +21,69 @@ import torchvision.transforms.functional as F
 from torch.utils.data import Dataset, DataLoader
 
 from efficientvit.apps.data_provider import DataProvider
+from efficientvit.apps.data_provider.random_resolution import RRSController
 
 __all__ = ["SegDataProvider"] # create_dataset, create_data_loader 제거
+
+class SegFollowActiveSize:
+    """RRSController.ACTIVE_SIZE를 따라 최종 리사이즈 (Tensor/PIL 모두 안전)"""
+    def __init__(self, fallback_size: tuple[int, int]):
+        self.fallback = tuple(fallback_size)
+
+    @staticmethod
+    def _resize_tensor(x, size: tuple[int, int], mode: str):
+        import torch
+        import torch.nn.functional as nnF
+        orig_dtype = x.dtype
+
+        if x.ndim == 2:            # H, W
+            x4 = x.unsqueeze(0).unsqueeze(0).to(dtype=torch.float32)
+            y4 = nnF.interpolate(x4, size=size, mode=mode)
+            y = y4.squeeze(0).squeeze(0).to(dtype=orig_dtype)
+        elif x.ndim == 3:          # C, H, W
+            x4 = x.unsqueeze(0).to(dtype=torch.float32)
+            y4 = nnF.interpolate(x4, size=size, mode=mode)
+            y = y4.squeeze(0).to(dtype=orig_dtype)
+        elif x.ndim == 4:          # N, C, H, W
+            y = nnF.interpolate(x.to(dtype=torch.float32), size=size, mode=mode).to(dtype=orig_dtype)
+        else:
+            raise ValueError(f"Unsupported tensor ndim={x.ndim} for resize")
+        return y
+
+    def __call__(self, sample):
+        # 해상도 결정
+        size = getattr(RRSController, "ACTIVE_SIZE", None)
+        if size is None:
+            size = self.fallback
+        size = tuple(size)  # (H, W)
+
+        # 가져오기
+        img = sample["image"]
+        lbl = sample["label"]
+
+        # Tensor/PIL 분기
+        import torch
+        from torchvision.transforms import InterpolationMode
+        import torchvision.transforms.functional as F
+
+        # image → bilinear
+        if isinstance(img, torch.Tensor):
+            img = self._resize_tensor(img, size, mode="bilinear")
+        else:
+            img = F.resize(img, size, InterpolationMode.BILINEAR)
+
+        # label → nearest (정수 클래스 보존)
+        if isinstance(lbl, torch.Tensor):
+            # interpolate는 float 기대 → nearest로 보간 후 원래 dtype 복원
+            orig_dtype = lbl.dtype
+            lbl = self._resize_tensor(lbl.to(dtype=torch.float32), size, mode="nearest").to(dtype=orig_dtype)
+        else:
+            lbl = F.resize(lbl, size, InterpolationMode.NEAREST)
+
+        sample["image"] = img
+        sample["label"] = lbl
+        return sample
+
 
 class RemapClasses:
     """
@@ -102,34 +163,60 @@ class SegRandomHorizontalFlip:
 
 class SegRandomResizedCrop:
     """이미지와 레이블에 대해 랜덤 리사이즈 및 크롭을 적용합니다."""
-    def __init__(self, size: int, scale: tuple[float, float] = (0.5, 2.0)):
-        self.size = (size, size)
+
+    def __init__(self, size: int | list[int] | tuple[int, int], scale: tuple[float, float] = (0.5, 2.0)):
+        if isinstance(size, int):
+            self.size = [size, size]
+        else:
+            self.size = list(size)
         self.scale = scale
 
     def __call__(self, sample: Dict[str, Any]) -> Dict[str, Any]:
-        i, j, h, w = transforms.RandomResizedCrop.get_params(sample['image'], self.scale, ratio=(0.75, 1.33))
-        sample['image'] = F.resized_crop(sample['image'], i, j, h, w, self.size, transforms.InterpolationMode.BILINEAR)
-        sample['label'] = F.resized_crop(sample['label'], i, j, h, w, self.size, transforms.InterpolationMode.NEAREST)
+        i, j, h, w = transforms.RandomResizedCrop.get_params(
+            sample["image"], self.scale, ratio=(0.75, 1.33)
+        )
+        sample["image"] = F.resized_crop(
+            sample["image"], i, j, h, w, self.size, transforms.InterpolationMode.BILINEAR
+        )
+        sample["label"] = F.resized_crop(
+            sample["label"], i, j, h, w, self.size, transforms.InterpolationMode.NEAREST
+        )
         return sample
+
 
 class SegResize:
-    """이미지와 레이블을 주어진 크기로 리사이즈합니다."""
-    def __init__(self, size: int):
-        self.size = (size, size)
+    """고정 해상도 리사이즈 (검증용)"""
+
+    def __init__(self, size: int | list[int] | tuple[int, int]):
+        if isinstance(size, int):
+            self.size = [size, size]
+        else:
+            self.size = list(size)
 
     def __call__(self, sample: Dict[str, Any]) -> Dict[str, Any]:
-        sample['image'] = F.resize(sample['image'], self.size, transforms.InterpolationMode.BILINEAR)
-        sample['label'] = F.resize(sample['label'], self.size, transforms.InterpolationMode.NEAREST)
+        # 생성자에서 받은 고정 해상도 사용
+        sample["image"] = F.resize(
+            sample["image"], self.size, transforms.InterpolationMode.BILINEAR
+        )
+        sample["label"] = F.resize(
+            sample["label"], self.size, transforms.InterpolationMode.NEAREST
+        )
         return sample
 
+
 class SegCenterCrop:
-    """이미지와 레이블의 중앙을 크롭합니다."""
-    def __init__(self, size: int):
-        self.size = (size, size)
+    """고정 해상도 중앙 크롭 (검증용)"""
+
+    def __init__(self, size: int | list[int] | tuple[int, int]):
+        if isinstance(size, int):
+            self.size = [size, size]
+        else:
+            self.size = list(size)
 
     def __call__(self, sample: Dict[str, Any]) -> Dict[str, Any]:
-        sample['image'] = F.center_crop(sample['image'], self.size)
-        sample['label'] = F.center_crop(sample['label'], self.size)
+        # 생성자에서 받은 고정 해상도 사용
+        sample["image"] = F.center_crop(sample["image"], self.size)
+        sample["label"] = F.center_crop(sample["label"], self.size)
         return sample
 
 class SegmentationDataset(Dataset):
@@ -299,6 +386,8 @@ class SegDataProvider(DataProvider):
             SegRandomHorizontalFlip(),
             SegToTensor(),
             SegNormalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+            # --- 추가 ---
+            SegFollowActiveSize(image_size[0]),
         ])
         return SegCompose(train_transforms)
 
