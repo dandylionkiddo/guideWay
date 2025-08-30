@@ -48,7 +48,7 @@ run_config:
   early_stopping_metric: val_miou 
   # Loss Function
   loss:
-    name: 'focal' # 'cross_entropy', 'focal', or 'dice'
+    name: 'combo' # 'cross_entropy', 'focal', or 'dice'
     # focal_loss_alpha: 0.25 # Optional: for focal loss
     # focal_loss_gamma: 2.0 # Optional: for focal loss
 

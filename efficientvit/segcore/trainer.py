@@ -78,9 +78,30 @@ class SegTrainer(Trainer):
         elif loss_config['name'] == "dice":
             from efficientvit.models.nn.loss import DiceLoss
 
-            self.criterion = DiceLoss(n_classes=self.n_classes)
+            from efficientvit.models.nn.loss import DiceLoss
+
+            # 설정 파일에서 smooth 값을 읽어옵니다. 없으면 1.0을 기본값으로 사용합니다.
+            smooth_val = loss_config.get("dice_loss_smooth", 1.0)
+            self.criterion = DiceLoss(n_classes=self.n_classes, smooth=smooth_val)
             if is_master():
-                self.write_log("Using Dice Loss")
+                self.write_log(f"Using Dice Loss with smooth={smooth_val}")
+        elif loss_config['name'] == "combo":
+            from efficientvit.models.nn.loss import ComboLoss
+
+            focal_weight = loss_config.get("focal_weight", 1.0)
+            dice_weight = loss_config.get("dice_weight", 1.0)
+
+            self.criterion = ComboLoss(
+                n_classes=self.n_classes,
+                focal_alpha=loss_config.get("focal_alpha", 0.25),
+                focal_gamma=loss_config.get("focal_gamma", 2.0),
+                focal_weight=focal_weight,
+                dice_smooth=loss_config.get("dice_loss_smooth", 1e-6),
+                dice_weight=dice_weight,
+                ignore_index=255,
+            )
+            if is_master():
+                self.write_log(f"Using Combo Loss with focal_weight={focal_weight} and dice_weight={dice_weight}")
         else:
             self.criterion = nn.CrossEntropyLoss(ignore_index=255)
             if is_master():
