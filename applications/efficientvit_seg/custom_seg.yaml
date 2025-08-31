@@ -10,6 +10,12 @@ data_provider:
   data_dir: D:\AIffel\EfficientViT\data\mapillary-vistas-dataset_public_v2.0\demo_training # \demo_training
   n_classes: 19 # 새로운 클래스 수
   class_mapping_path: D:\AIffel\EfficientViT\efficientvit\applications\efficientvit_seg\custom_class_mapping.json # 클래스 매핑 파일 경로
+  
+  # Color Augmentation
+  # brightness: 0.1 # 밝기 변환 값 (0.1 = 10% 범위 내에서 랜덤 조절)
+  # contrast: 0.1   # 대비 변환 값
+  # saturation: 0.1 # 채도 변환 값
+  # color_aug_hue: 0.1 # 색조 변환 증강 값. 0보다 크면 적용, 0.1은 -0.1에서 0.1 사이의 값으로 랜덤하게 변환
 
   # SegDataProvider가 데이터셋 구조를 파악하는 데 사용하는 정보
   train_split: training

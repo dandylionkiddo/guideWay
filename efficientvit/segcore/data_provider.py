@@ -22,6 +22,7 @@ from torch.utils.data import Dataset, DataLoader
 
 from efficientvit.apps.data_provider import DataProvider
 from efficientvit.apps.data_provider.random_resolution import RRSController
+from efficientvit.apps.data_provider.augment import ColorAug
 
 __all__ = ["SegDataProvider"] # create_dataset, create_data_loader 제거
 
@@ -315,6 +316,10 @@ class SegDataProvider(DataProvider):
         val_split: str = "val",
         class_mapping_path: Optional[str] = None,
         class_definitions_file: Optional[str] = None,
+        color_aug_hue: Optional[float] = None,
+        brightness: Optional[float] = None,
+        contrast: Optional[float] = None,
+        saturation: Optional[float] = None,
     ):
         """
         Args:
@@ -337,6 +342,10 @@ class SegDataProvider(DataProvider):
             val_split (str, optional): 검증용 데이터 분할 이름.
             class_mapping_path (Optional[str], optional): 클래스 리매핑 JSON 파일 경로.
             class_definitions_file (Optional[str], optional): 커스텀 클래스 정의 JSON 파일 경로.
+            color_aug_hue (Optional[float], optional): 색조 변환 증강 값.
+            brightness (Optional[float], optional): 밝기 변환 증강 값.
+            contrast (Optional[float], optional): 대비 변환 증강 값.
+            saturation (Optional[float], optional): 채도 변환 증강 값.
         """
         self.data_dir = data_dir
         self.n_classes = n_classes
@@ -346,6 +355,10 @@ class SegDataProvider(DataProvider):
         self.label_suffix = label_suffix
         self.train_split = train_split
         self.val_split = val_split
+        self.color_aug_hue = color_aug_hue
+        self.brightness = brightness
+        self.contrast = contrast
+        self.saturation = saturation
 
         self.class_mapping = None
         if class_mapping_path:
@@ -384,6 +397,22 @@ class SegDataProvider(DataProvider):
         train_transforms.extend([
             SegRandomResizedCrop(image_size[0], scale=(0.5, 2.0)),
             SegRandomHorizontalFlip(),
+        ])
+
+        color_jitter_params = {}
+        if self.brightness is not None:
+            color_jitter_params['brightness'] = self.brightness
+        if self.contrast is not None:
+            color_jitter_params['contrast'] = self.contrast
+        if self.saturation is not None:
+            color_jitter_params['saturation'] = self.saturation
+        if self.color_aug_hue is not None:
+            color_jitter_params['hue'] = self.color_aug_hue
+        
+        if color_jitter_params:
+            train_transforms.append(ColorAug(key='image', **color_jitter_params))
+
+        train_transforms.extend([
             SegToTensor(),
             SegNormalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
             # --- 추가 ---
