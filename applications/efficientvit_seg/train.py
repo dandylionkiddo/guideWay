@@ -78,6 +78,7 @@ def main() -> None:
         data_provider_classes=ALL_SEG_DATA_PROVIDERS,
         is_distributed=get_dist_size() > 1,
     )
+    print(f"[Train Script] Validation dataset size: {len(data_provider.valid.dataset)}")
 
     # 4. 학습 실행 설정
     # `setup_run_config`은 `exp_config`의 'run_config' 섹션을 기반으로

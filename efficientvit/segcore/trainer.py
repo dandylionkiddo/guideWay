@@ -141,6 +141,7 @@ class SegTrainer(Trainer):
         val_loss = AverageMeter()
         hist = np.zeros((self.n_classes, self.n_classes))
 
+        printed_label_shape = False
         model.eval()  # 모델을 평가 모드로 설정
         with torch.no_grad():  # 그래디언트 계산 비활성화
             with tqdm(
@@ -160,6 +161,9 @@ class SegTrainer(Trainer):
                     val_loss.update(loss.item(), images.size(0))
 
                     pred = torch.argmax(output, dim=1)
+                    if not printed_label_shape:
+                        print(f"[Trainer Validation] Label shape: {labels.shape}")
+                        printed_label_shape = True
                     hist += _fast_hist(labels.cpu().numpy(), pred.cpu().numpy(), self.n_classes)
 
                     t.set_postfix({"loss": val_loss.avg, "bs": images.shape[0]})

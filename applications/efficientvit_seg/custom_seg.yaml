@@ -6,8 +6,8 @@ model:
 data_provider:
   task: seg
   dataset: mapillary 
-  # data_dir: D:\AIffel\EfficientViT\data\mapillary-vistas-dataset_public_v2.0
-  data_dir: D:\AIffel\EfficientViT\data\mapillary-vistas-dataset_public_v2.0\demo_training # \demo_training
+  data_dir: D:\AIffel\EfficientViT\data\mapillary-vistas-dataset_public_v2.0
+  # data_dir: D:\AIffel\EfficientViT\data\mapillary-vistas-dataset_public_v2.0\demo_training # \demo_training
   n_classes: 19 # 새로운 클래스 수
   class_mapping_path: D:\AIffel\EfficientViT\efficientvit\applications\efficientvit_seg\custom_class_mapping.json # 클래스 매핑 파일 경로
   
@@ -33,7 +33,7 @@ data_provider:
 
 # run config (SegFormer에 맞게 일부 하이퍼파라미터 조절)
 run_config:
-  n_epochs: 10
+  n_epochs: 1
   base_lr: 0.001
   warmup_epochs: 10
   warmup_lr: 0.0

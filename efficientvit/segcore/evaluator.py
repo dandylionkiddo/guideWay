@@ -162,6 +162,7 @@ class Evaluator:
         self._setup_save_dirs()
 
         results_to_save = []
+        printed_mask_shape = False
         with torch.inference_mode():
             with tqdm(total=len(self.data_loader), desc="Stage 1: Inference") as t:
                 for feed_dict in self.data_loader:
@@ -172,11 +173,14 @@ class Evaluator:
                     self.time_meter.update(time.time() - start_time)
 
                     if output.shape[-2:] != mask.shape[-2:]:
-                        output = resize(output, size=mask.shape[-2:])
+                        output = resize(output, size=mask.shape[-2:], mode="bilinear", align_corners=True)
 
                     pred = torch.argmax(output, dim=1)
 
                     if "calculate_miou" in self.tasks:
+                        if not printed_mask_shape:
+                            print(f"[Evaluator] Mask shape: {mask.shape}")
+                            printed_mask_shape = True
                         stats = self.iou_metric(pred, mask)
                         self.intersection_meter.update(stats["i"])
                         self.union_meter.update(stats["u"])
@@ -192,10 +196,14 @@ class Evaluator:
 
         if "save_images" in self.tasks and self.labeled_dir:
             saving_config = self.config.get("saving", {})
-            sample_ratio = saving_config.get("image_sample_ratio", 1.0)
-            
-            num_to_save = int(len(results_to_save) * sample_ratio)
-            sampled_results = random.sample(results_to_save, num_to_save) if sample_ratio < 1.0 else results_to_save
+            save_n_images = saving_config.get("save_n_images")
+
+            if save_n_images and isinstance(save_n_images, int) and save_n_images > 0:
+                sampled_results = results_to_save[:save_n_images]
+            else:
+                sample_ratio = saving_config.get("image_sample_ratio", 1.0)
+                num_to_save = int(len(results_to_save) * sample_ratio)
+                sampled_results = random.sample(results_to_save, num_to_save) if sample_ratio < 1.0 else results_to_save
             
             print(f"Saving {len(sampled_results)} out of {len(results_to_save)} images...")
             with tqdm(total=len(sampled_results), desc="Stage 2: Saving Images") as t:

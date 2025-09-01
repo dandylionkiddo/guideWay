@@ -60,6 +60,7 @@ def main() -> None:
         data_provider_classes=[SegDataProvider],
         is_distributed=get_dist_size() > 1,
     )
+    print(f"[Eval Script] Validation dataset size: {len(data_provider.valid.dataset)}")
     # 평가에는 `valid` 데이터로더를 사용합니다.
     data_loader = data_provider.valid
     print(f"Loaded dataset with {len(data_loader.dataset)} images using SegDataProvider.")
