@@ -574,20 +574,46 @@ class OptimizedEfficientViTInference:
         # #     model = MinimalSegmentationModel(num_classes=19)
         # #     print("✓ 최소 작동 모델 생성 완료")
         # #     print("⚠️ 경고: 훈련되지 않은 최소 모델을 데모용으로 사용")
-        # seg_model_zoo에서 등록된 정보 직접 가져오기 (하드코딩 완전 제거)
+            # 🔄 동적 경로 해결: seg_model_zoo의 등록 정보 활용
             if model_name_mapped in REGISTERED_EFFICIENTVIT_SEG_MODEL:
-                model_builder, norm_eps, default_pt_path = REGISTERED_EFFICIENTVIT_SEG_MODEL[model_name_mapped]
-                print(f"seg_model_zoo 등록 정보 사용: {default_pt_path}")
-            
-            # seg_model_zoo의 create 함수가 모든 로직을 처리하도록 함
-            model = create_efficientvit_seg_model(
-                name=model_name_mapped,
-                dataset="cityscapes", 
-                pretrained=True,
-                weight_url=None,  # seg_model_zoo가 알아서 기본 경로 사용
-                n_classes=19
-            )
-            print(f"✓ seg_model_zoo로 모델 로딩 완료: {model_name_mapped}")
+                model_builder, norm_eps, registered_path = REGISTERED_EFFICIENTVIT_SEG_MODEL[model_name_mapped]
+                
+                # efficientvit 하위 디렉토리를 고려한 경로 생성
+                current_dir = os.getcwd()
+                efficientvit_path = os.path.join(current_dir, "efficientvit", registered_path)
+                
+                print(f"등록된 경로: {registered_path}")
+                print(f"실제 확인 경로: {efficientvit_path}")
+                
+                if os.path.exists(efficientvit_path):
+                    print(f"✓ 로컬 체크포인트 발견: {efficientvit_path}")
+                    model = create_efficientvit_seg_model(
+                        name=model_name_mapped,
+                        dataset="cityscapes",
+                        weight_url=efficientvit_path,
+                        n_classes=19
+                    )
+                    print(f"✓ 로컬에서 모델 로딩 완료: {model_name_mapped}")
+                else:
+                    print(f"로컬 파일 없음, 온라인 다운로드 시도...")
+                    model = create_efficientvit_seg_model(
+                        name=model_name_mapped,
+                        dataset="cityscapes",
+                        pretrained=True,
+                        weight_url=None,  # seg_model_zoo가 알아서 기본 경로 사용
+                        n_classes=19
+                    )
+                    print(f"✓ 온라인에서 모델 로딩 완료: {model_name_mapped}")
+            else:
+                # 등록 정보가 없는 경우 온라인 다운로드
+                print(f"등록 정보 없음, 온라인 다운로드...")
+                model = create_efficientvit_seg_model(
+                    name=model_name_mapped,
+                    dataset="cityscapes",
+                    pretrained=True,
+                    n_classes=19
+                )
+                print(f"✓ 온라인에서 모델 로딩 완료: {model_name_mapped}")
                 
         except Exception as e:
             print(f"EfficientViT 로딩 실패: {e}")
@@ -654,7 +680,7 @@ class OptimizedEfficientViTInference:
         #                         # interpolation=cv2.INTER_LINEAR)  # 더 부드러운 보간 -> 클래스 경계에서 잘못된 중간값들이 생성됨 (실패)
         
         # return pred_resized
-        """부드러운 세그멘테이션을 위한 개선된 출력 후처리"""
+        # """부드러운 세그멘테이션을 위한 개선된 출력 후처리"""
         # with torch.no_grad():
         #     # 모델 출력 처리
         #     if isinstance(output, dict):
@@ -682,6 +708,7 @@ class OptimizedEfficientViTInference:
             
         #     # CPU로 이동
         #     pred_cpu = pred.cpu().numpy().astype(np.uint8)
+        """젯슨 최적화된 후처리"""
         # torch.no_grad() 제거 (이미 inference_mode 안에 있음)
         # 모델 출력 처리
         if isinstance(output, dict):
@@ -695,17 +722,19 @@ class OptimizedEfficientViTInference:
             logits = output
         
         # 메모리 효율적인 보간 및 argmax
-        upsampled_logits = torch.nn.functional.interpolate(
-            logits, 
-            size=original_shape[:2], 
-            mode='bicubic',  # 또는 'bilinear'
-            align_corners=False
-        )
+        if logits.shape[-2:] != original_shape[:2]:
+            upsampled_logits = torch.nn.functional.interpolate(
+                logits, 
+                size=original_shape[:2], 
+                mode='bilinear',  # 또는 'bicubic'
+                align_corners=False
+            )
+        else:
+            upsampled_logits = logits
         
+        # 소프트맥스 없이 바로 argmax (메모리/연산 절약)
         pred = torch.argmax(upsampled_logits, dim=1).squeeze()
-        pred_cpu = pred.cpu().numpy().astype(np.uint8)
-        
-        return pred_cpu
+        return pred.cpu().numpy().astype(np.uint8)
     
     def create_mask_visualization(self, segmentation_mask):
         """마스크만으로 구성된 시각화 생성"""
@@ -1388,6 +1417,7 @@ class OptimizedEfficientViTInference:
                 # 🚀 OpenCV bitwise_or로 합성
                 result = cv2.bitwise_or(result, masked_color)
         
+        # 🔥 통계 완전 생략
         return result, {}
 
 def main():
