@@ -1,15 +1,15 @@
 # model
 model:
-  name: efficientvit-seg-b0 # 1. 모델 이름을 segformer-b0로 변경
+  name: efficientvit-seg-b1 # 1. 모델 이름을 segformer-b0로 변경
 
 # data provider (데이터셋 설정은 그대로 유지)
 data_provider:
   task: seg
   dataset: mapillary 
-  data_dir: D:\AIffel\EfficientViT\data\mapillary-vistas-dataset_public_v2.0
+  data_dir: D:\AIffel\EfficientViT\data\multi-class-segmentation
   # data_dir: D:\AIffel\EfficientViT\data\mapillary-vistas-dataset_public_v2.0\demo_training # \demo_training
-  n_classes: 19 # 새로운 클래스 수
-  class_mapping_path: D:\AIffel\EfficientViT\efficientvit\applications\efficientvit_seg\custom_class_mapping.json # 클래스 매핑 파일 경로
+  n_classes: 20 # 새로운 클래스 수
+  # class_mapping_path: D:\AIffel\EfficientViT\efficientvit\applications\efficientvit_seg\custom_class_mapping.json # 클래스 매핑 파일 경로
   
   # Color Augmentation
   # brightness: 0.1 # 밝기 변환 값 (0.1 = 10% 범위 내에서 랜덤 조절)
@@ -33,7 +33,7 @@ data_provider:
 
 # run config (SegFormer에 맞게 일부 하이퍼파라미터 조절)
 run_config:
-  n_epochs: 1
+  n_epochs: 2
   base_lr: 0.001
   warmup_epochs: 10
   warmup_lr: 0.0
@@ -63,5 +63,5 @@ model_init:
   rand_init: trunc_normal
   last_gamma: 0.0
 #   # 사전 학습된 가중치를 사용하되, head 부분은 랜덤 초기화되므로 finetuning과 유사하게 동작
-#   backbone_init_from: D:\AIffel\EfficientViT\efficientvit\efficientvit\assets\checkpoints\efficientvit_seg\efficientvit_seg_b0_cityscapes.pt
+  backbone_init_from: D:\AIffel\EfficientViT\efficientvit\output\from_runpod\efficientvit-b1-combo.pt
   # init_from: d:\AIffel\EfficientViT\efficientvit\output\from_runpod\checkpoint.pt

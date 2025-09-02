@@ -30,7 +30,7 @@ data_provider:
 model:
   name: "efficientvit-seg-b1"
   n_classes: 19
-  weight_url: "D:/AIffel/EfficientViT/efficientvit/output/from_runpod/efficientvit-b1-coloraug.pt"
+  weight_url: "D:/AIffel/EfficientViT/efficientvit/output/from_runpod/efficientvit-b1-final.pt"
 
 # 평가 결과 저장 경로
 save_path: "./output/eval_results"
