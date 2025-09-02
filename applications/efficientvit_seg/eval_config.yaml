@@ -40,7 +40,7 @@ saving:
   # 순서대로 저장할 이미지 개수. 이 항목이 있으면 image_sample_ratio 대신 사용됩니다.
   save_n_images: 10
   # 저장할 이미지 비율 (0.0 ~ 1.0). 1.0 또는 항목이 없으면 모두 저장.
-  image_sample_ratio: 0.0
+  image_sample_ratio: 0.01
 
 # 평가 항목 설정 (원하는 항목만 남기거나 주석 처리)
 evaluation_tasks:
