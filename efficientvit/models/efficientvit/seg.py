@@ -376,6 +376,21 @@ def efficientvit_seg_l1(dataset: str, **kwargs) -> EfficientViTSeg:
             act_func="gelu",
             **build_kwargs_from_config(kwargs, SegHead),
         )
+    elif dataset == "mapillary":
+        head = SegHead(
+            fid_list=["stage4", "stage3", "stage2"],
+            in_channel_list=[512, 256, 128],
+            stride_list=[32, 16, 8],
+            head_stride=8,
+            head_width=256,
+            head_depth=3,
+            expand_ratio=1,
+            middle_op="fmbconv",
+            final_expand=None,
+            n_classes=124 if custom_n_classes is None else custom_n_classes,
+            act_func="gelu",
+            **build_kwargs_from_config(kwargs, SegHead),
+        )
     elif dataset == "ade20k":
         head = SegHead(
             fid_list=["stage4", "stage3", "stage2"],
