@@ -143,7 +143,8 @@ class EfficientViTModelManager:
 
 class OptimizedEfficientViTInference:
     def __init__(self, model_name="efficientvit_seg_b0", device="cuda", optimize_jetson=True, 
-                 class_mapping="auto"):
+                #  class_mapping="auto"):
+                 class_mapping="auto", custom_input_size=None, no_interpolation=False):
         print(f"\n=== Initializing EfficientViT Inference ===")
         
         # 표준 데이터셋 클래스 정의
@@ -197,6 +198,7 @@ class OptimizedEfficientViTInference:
         self.num_classes = None
         self.class_names = None
         self.class_colors = None
+        self.no_interpolation = no_interpolation
         
         # 젯슨 최적화
         if optimize_jetson:
@@ -212,7 +214,25 @@ class OptimizedEfficientViTInference:
         
         self.model_name = model_name
         self.model_info = model_info
-        self.device = device if torch.cuda.is_available() else "cpu"
+        self.device = device if torch.cuda.is_available() else "cpu"  # 이 줄을 여기로 이동
+        
+        # 🔥 사용자 정의 입력 크기 설정
+        if custom_input_size:
+            self.input_size = custom_input_size
+            print(f"Using custom input size: {custom_input_size}")
+        else:
+            self.input_size = model_info['input_size']
+            print(f"Using default input size: {self.input_size}")
+        
+        print(f"Selected Model: {model_name}")
+        print(f"Model Info: {model_info['description']}")
+        print(f"Parameters: {model_info['params']}")
+        print(f"Device: {self.device}")
+        print(f"No interpolation mode: {no_interpolation}")
+        
+        # self.model_name = model_name
+        # self.model_info = model_info
+        # self.device = device if torch.cuda.is_available() else "cpu"
         
         print(f"Selected Model: {model_name}")
         print(f"Model Info: {model_info['description']}")
@@ -233,8 +253,10 @@ class OptimizedEfficientViTInference:
         # 모델의 실제 클래스 수 감지 및 클래스 매핑 설정
         self.detect_and_setup_classes()
         
-        # 전처리 파이프라인
-        input_size = model_info['input_size']
+        # # 전처리 파이프라인
+        # input_size = model_info['input_size']
+        # 전처리 파이프라인 - 사용자 정의 크기 사용
+        input_size = self.input_size  # self.input_size 사용
         self.transform = transforms.Compose([
             transforms.ToPILImage(),
             transforms.Resize(input_size),
@@ -372,61 +394,62 @@ class OptimizedEfficientViTInference:
         """EfficientViT 사전 훈련된 모델 로드 - 올바른 API 사용"""
         print(f"모델 로딩 중: {self.model_name}...")
         
-        model = None
+        # model = None
         
         # 방법 1: 올바른 EfficientViT API 사용
         try:
-            print("EfficientViT seg_model_zoo로 로딩 중...")
-            # 올바른 import 방법
-            from efficientvit.seg_model_zoo import create_efficientvit_seg_model
+            # print("EfficientViT seg_model_zoo로 로딩 중...")
+            # # 올바른 import 방법
+            # from efficientvit.seg_model_zoo import create_efficientvit_seg_model
             
-            # # 체크포인트 파일 경로 설정
-            # checkpoint_path = "efficientvit/assets/checkpoints/efficientvit_seg/efficientvit_seg_b0_cityscapes.pt"
+            # # # 체크포인트 파일 경로 설정
+            # # checkpoint_path = "efficientvit/assets/checkpoints/efficientvit_seg/efficientvit_seg_b0_cityscapes.pt"
             
-            # # 모델명 매핑 (참고 코드 기반)
-            # model_mapping = {
-            #     'efficientvit_seg_b0': 'efficientvit-seg-b0',  # 수정된 부분
-            #     'efficientvit_seg_b1': 'efficientvit-seg-b1', 
-            #     'efficientvit_seg_b2': 'efficientvit-seg-b2',
-            #     'efficientvit_seg_b3': 'efficientvit-seg-b3',
-            #     'efficientvit_seg_l1': 'efficientvit-seg-l1',
-            #     'efficientvit_seg_l2': 'efficientvit-seg-l2'
+            # # # 모델명 매핑 (참고 코드 기반)
+            # # model_mapping = {
+            # #     'efficientvit_seg_b0': 'efficientvit-seg-b0',  # 수정된 부분
+            # #     'efficientvit_seg_b1': 'efficientvit-seg-b1', 
+            # #     'efficientvit_seg_b2': 'efficientvit-seg-b2',
+            # #     'efficientvit_seg_b3': 'efficientvit-seg-b3',
+            # #     'efficientvit_seg_l1': 'efficientvit-seg-l1',
+            # #     'efficientvit_seg_l2': 'efficientvit-seg-l2'
+            # # }
+            
+            # # model_name_mapped = model_mapping.get(self.model_name, 'efficientvit-seg-b0')
+            
+            # # # 체크포인트 파일이 있는지 확인하고 로컬에서 로드
+            # # if os.path.exists(checkpoint_path):
+            # #     print(f"✓ 체크포인트 파일 발견: {checkpoint_path}")
+            # #     # 수정된 함수 호출 방식 (이미지 참고)
+            # #     model = create_efficientvit_seg_model(
+            # #         name=model_name_mapped,
+            # #         dataset="cityscapes",  # 필수 인자 추가
+            # #         weight_url=checkpoint_path,
+            # #         n_classes=19  # Cityscapes 클래스 수
+            # #     )
+            # #     print(f"✓ 로컬 체크포인트에서 EfficientViT 모델 로딩 완료: {model_name_mapped}")
+            # # else:
+            # #     # 온라인에서 다운로드
+            # #     print("온라인에서 모델 다운로드 중...")
+            # #     model = create_efficientvit_seg_model(
+            # #         name=model_name_mapped,
+            # #         dataset="cityscapes",  # 필수 인자 추가
+            # #         pretrained=True,
+            # #         n_classes=19  # Cityscapes 클래스 수
+            # #     )
+            # #     print(f"✓ 온라인에서 EfficientViT 모델 로딩 완료: {model_name_mapped}")
+            # # ✅ 수정: 모델별 체크포인트 파일 경로 매핑
+            # checkpoint_mapping = {
+            #     'efficientvit_seg_b0': "efficientvit/assets/checkpoints/efficientvit_seg/efficientvit_seg_b0_cityscapes.pt",
+            #     'efficientvit_seg_b1': "efficientvit/assets/checkpoints/efficientvit_seg/efficientvit_seg_b1_cityscapes.pt",
+            #     'efficientvit_seg_b2': "efficientvit/assets/checkpoints/efficientvit_seg/efficientvit_seg_b2_cityscapes.pt", 
+            #     'efficientvit_seg_b3': "efficientvit/assets/checkpoints/efficientvit_seg/efficientvit_seg_b3_cityscapes.pt",
+            #     'efficientvit_seg_l1': "efficientvit/assets/checkpoints/efficientvit_seg/efficientvit_seg_l1_cityscapes.pt",
+            #     'efficientvit_seg_l2': "efficientvit/assets/checkpoints/efficientvit_seg/efficientvit_seg_l2_cityscapes.pt"
             # }
             
-            # model_name_mapped = model_mapping.get(self.model_name, 'efficientvit-seg-b0')
-            
-            # # 체크포인트 파일이 있는지 확인하고 로컬에서 로드
-            # if os.path.exists(checkpoint_path):
-            #     print(f"✓ 체크포인트 파일 발견: {checkpoint_path}")
-            #     # 수정된 함수 호출 방식 (이미지 참고)
-            #     model = create_efficientvit_seg_model(
-            #         name=model_name_mapped,
-            #         dataset="cityscapes",  # 필수 인자 추가
-            #         weight_url=checkpoint_path,
-            #         n_classes=19  # Cityscapes 클래스 수
-            #     )
-            #     print(f"✓ 로컬 체크포인트에서 EfficientViT 모델 로딩 완료: {model_name_mapped}")
-            # else:
-            #     # 온라인에서 다운로드
-            #     print("온라인에서 모델 다운로드 중...")
-            #     model = create_efficientvit_seg_model(
-            #         name=model_name_mapped,
-            #         dataset="cityscapes",  # 필수 인자 추가
-            #         pretrained=True,
-            #         n_classes=19  # Cityscapes 클래스 수
-            #     )
-            #     print(f"✓ 온라인에서 EfficientViT 모델 로딩 완료: {model_name_mapped}")
-            # ✅ 수정: 모델별 체크포인트 파일 경로 매핑
-            checkpoint_mapping = {
-                'efficientvit_seg_b0': "efficientvit/assets/checkpoints/efficientvit_seg/efficientvit_seg_b0_cityscapes.pt",
-                'efficientvit_seg_b1': "efficientvit/assets/checkpoints/efficientvit_seg/efficientvit_seg_b1_cityscapes.pt",
-                'efficientvit_seg_b2': "efficientvit/assets/checkpoints/efficientvit_seg/efficientvit_seg_b2_cityscapes.pt", 
-                'efficientvit_seg_b3': "efficientvit/assets/checkpoints/efficientvit_seg/efficientvit_seg_b3_cityscapes.pt",
-                'efficientvit_seg_l1': "efficientvit/assets/checkpoints/efficientvit_seg/efficientvit_seg_l1_cityscapes.pt",
-                'efficientvit_seg_l2': "efficientvit/assets/checkpoints/efficientvit_seg/efficientvit_seg_l2_cityscapes.pt"
-            }
-            
-            checkpoint_path = checkpoint_mapping.get(self.model_name)
+            # checkpoint_path = checkpoint_mapping.get(self.model_name)
+            from efficientvit.seg_model_zoo import create_efficientvit_seg_model, REGISTERED_EFFICIENTVIT_SEG_MODEL
             
             # 모델명 매핑 (수정된 부분)
             model_mapping = {
@@ -440,139 +463,183 @@ class OptimizedEfficientViTInference:
             
             model_name_mapped = model_mapping.get(self.model_name, 'efficientvit-seg-b0')
             
-            # 체크포인트 파일이 있는지 확인하고 로컬에서 로드
-            if checkpoint_path and os.path.exists(checkpoint_path):
-                print(f"✓ 체크포인트 파일 발견: {checkpoint_path}")
-                model = create_efficientvit_seg_model(
-                    name=model_name_mapped,
-                    dataset="cityscapes",
-                    weight_url=checkpoint_path,
-                    n_classes=19
-                )
-                print(f"✓ 로컬 체크포인트에서 EfficientViT 모델 로딩 완료: {model_name_mapped}")
+        #     # 체크포인트 파일이 있는지 확인하고 로컬에서 로드
+        #     if checkpoint_path and os.path.exists(checkpoint_path):
+        #         print(f"✓ 체크포인트 파일 발견: {checkpoint_path}")
+        #         model = create_efficientvit_seg_model(
+        #             name=model_name_mapped,
+        #             dataset="cityscapes",
+        #             weight_url=checkpoint_path,
+        #             n_classes=19
+        #         )
+        #         print(f"✓ 로컬 체크포인트에서 EfficientViT 모델 로딩 완료: {model_name_mapped}")
+        #     else:
+        #         # ✅ 수정: 온라인에서 다운로드 (체크포인트 파일이 없을 때)
+        #         print("온라인에서 모델 다운로드 중...")
+        #         model = create_efficientvit_seg_model(
+        #             name=model_name_mapped,
+        #             dataset="cityscapes",
+        #             pretrained=True,
+        #             n_classes=19
+        #         )
+        #         print(f"✓ 온라인에서 EfficientViT 모델 로딩 완료: {model_name_mapped}")
+                
+        # except ImportError as e:
+        #     print(f"EfficientViT import 실패: {e}")
+        # except Exception as e:
+        #     print(f"EfficientViT 로딩 실패: {e}")
+        
+        # # 방법 2: 커스텀 모델 경로 시도 (이미지에서 보인 경로)
+        # if model is None:
+        #     try:
+        #         print("커스텀 모델 경로로 시도 중...")
+        #         from efficientvit.seg_model_zoo import create_efficientvit_seg_model
+                
+        #         # 이미지에서 본 경로 사용
+        #         custom_weight_path = "D:/Aiffel/efficientvit/efficientvit/output/from_runpod/model_best(1).pt"
+                
+        #         if os.path.exists(custom_weight_path):
+        #             model = create_efficientvit_seg_model(
+        #                 name="efficientvit-seg-b0",
+        #                 dataset="cityscapes",
+        #                 weight_url=custom_weight_path,
+        #                 n_classes=18  # 이미지에서 본 클래스 수
+        #             )
+        #             print(f"✓ 커스텀 경로에서 모델 로딩 완료")
+        #         else:
+        #             print(f"커스텀 가중치 파일을 찾을 수 없음: {custom_weight_path}")
+                    
+        #     except Exception as e:
+        #         print(f"커스텀 모델 로딩 실패: {e}")
+        
+        # # 방법 3: 기본 사전 훈련된 모델 시도
+        # if model is None:
+        #     try:
+        #         print("기본 사전 훈련된 모델로 시도 중...")
+        #         from efficientvit.seg_model_zoo import create_efficientvit_seg_model
+                
+        #         model = create_efficientvit_seg_model(
+        #             name="efficientvit-seg-b0",
+        #             dataset="cityscapes",
+        #             pretrained=True
+        #         )
+        #         print("✓ 기본 사전 훈련된 모델 로딩 완료")
+                
+        #     except Exception as e:
+        #         print(f"기본 모델 로딩 실패: {e}")
+        
+        # # # 방법 4: HuggingFace SegFormer 대안
+        # # if model is None:
+        # #     try:
+        # #         print("대안으로 HuggingFace에서 SegFormer 로딩 중...")
+        # #         from transformers import SegformerForSemanticSegmentation
+                
+        # #         model = SegformerForSemanticSegmentation.from_pretrained(
+        # #             "nvidia/segformer-b0-finetuned-cityscapes-512-1024"
+        # #         )
+        # #         print("✓ HuggingFace에서 SegFormer 모델 로딩 완료")
+                
+        # #     except Exception as e:
+        # #         print(f"HuggingFace SegFormer 실패: {e}")
+        
+        # # # 방법 5: 최소 작동 모델 (최후의 수단)
+        # # if model is None:
+        # #     print("최소 작동 모델 생성 중...")
+            
+        # #     import torch.nn as nn
+        # #     import torch.nn.functional as F
+            
+        # #     class MinimalSegmentationModel(nn.Module):
+        # #         def __init__(self, num_classes=19):
+        # #             super().__init__()
+        # #             self.num_classes = num_classes
+                    
+        # #             # 간단한 encoder-decoder 구조
+        # #             self.encoder = nn.Sequential(
+        # #                 nn.Conv2d(3, 64, 3, padding=1),
+        # #                 nn.ReLU(inplace=True),
+        # #                 nn.Conv2d(64, 64, 3, padding=1),
+        # #                 nn.ReLU(inplace=True),
+        # #                 nn.MaxPool2d(2),
+                        
+        # #                 nn.Conv2d(64, 128, 3, padding=1),
+        # #                 nn.ReLU(inplace=True),
+        # #                 nn.Conv2d(128, 128, 3, padding=1),
+        # #                 nn.ReLU(inplace=True),
+        # #                 nn.MaxPool2d(2),
+                        
+        # #                 nn.Conv2d(128, 256, 3, padding=1),
+        # #                 nn.ReLU(inplace=True),
+        # #             )
+                    
+        # #             # Decoder
+        # #             self.decoder = nn.Sequential(
+        # #                 nn.Conv2d(256, 128, 3, padding=1),
+        # #                 nn.ReLU(inplace=True),
+        # #                 nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False),
+                        
+        # #                 nn.Conv2d(128, 64, 3, padding=1),
+        # #                 nn.ReLU(inplace=True),
+        # #                 nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False),
+                        
+        # #                 nn.Conv2d(64, num_classes, 1)
+        # #             )
+                
+        # #         def forward(self, x):
+        # #             features = self.encoder(x)
+        # #             output = self.decoder(features)
+                    
+        # #             # 입력 크기로 리사이즈
+        # #             output = F.interpolate(output, size=x.shape[2:], mode='bilinear', align_corners=False)
+        # #             return output
+            
+        # #     model = MinimalSegmentationModel(num_classes=19)
+        # #     print("✓ 최소 작동 모델 생성 완료")
+        # #     print("⚠️ 경고: 훈련되지 않은 최소 모델을 데모용으로 사용")
+            # 🔄 동적 경로 해결: seg_model_zoo의 등록 정보 활용
+            if model_name_mapped in REGISTERED_EFFICIENTVIT_SEG_MODEL:
+                model_builder, norm_eps, registered_path = REGISTERED_EFFICIENTVIT_SEG_MODEL[model_name_mapped]
+                
+                # efficientvit 하위 디렉토리를 고려한 경로 생성
+                current_dir = os.getcwd()
+                efficientvit_path = os.path.join(current_dir, "efficientvit", registered_path)
+                
+                print(f"등록된 경로: {registered_path}")
+                print(f"실제 확인 경로: {efficientvit_path}")
+                
+                if os.path.exists(efficientvit_path):
+                    print(f"✓ 로컬 체크포인트 발견: {efficientvit_path}")
+                    model = create_efficientvit_seg_model(
+                        name=model_name_mapped,
+                        dataset="cityscapes",
+                        weight_url=efficientvit_path,
+                        n_classes=19
+                    )
+                    print(f"✓ 로컬에서 모델 로딩 완료: {model_name_mapped}")
+                else:
+                    print(f"로컬 파일 없음, 온라인 다운로드 시도...")
+                    model = create_efficientvit_seg_model(
+                        name=model_name_mapped,
+                        dataset="cityscapes",
+                        pretrained=True,
+                        weight_url=None,  # seg_model_zoo가 알아서 기본 경로 사용
+                        n_classes=19
+                    )
+                    print(f"✓ 온라인에서 모델 로딩 완료: {model_name_mapped}")
             else:
-                # ✅ 수정: 온라인에서 다운로드 (체크포인트 파일이 없을 때)
-                print("온라인에서 모델 다운로드 중...")
+                # 등록 정보가 없는 경우 온라인 다운로드
+                print(f"등록 정보 없음, 온라인 다운로드...")
                 model = create_efficientvit_seg_model(
                     name=model_name_mapped,
                     dataset="cityscapes",
                     pretrained=True,
                     n_classes=19
                 )
-                print(f"✓ 온라인에서 EfficientViT 모델 로딩 완료: {model_name_mapped}")
+                print(f"✓ 온라인에서 모델 로딩 완료: {model_name_mapped}")
                 
-        except ImportError as e:
-            print(f"EfficientViT import 실패: {e}")
         except Exception as e:
             print(f"EfficientViT 로딩 실패: {e}")
-        
-        # 방법 2: 커스텀 모델 경로 시도 (이미지에서 보인 경로)
-        if model is None:
-            try:
-                print("커스텀 모델 경로로 시도 중...")
-                from efficientvit.seg_model_zoo import create_efficientvit_seg_model
-                
-                # 이미지에서 본 경로 사용
-                custom_weight_path = "D:/Aiffel/efficientvit/efficientvit/output/from_runpod/model_best(1).pt"
-                
-                if os.path.exists(custom_weight_path):
-                    model = create_efficientvit_seg_model(
-                        name="efficientvit-seg-b0",
-                        dataset="cityscapes",
-                        weight_url=custom_weight_path,
-                        n_classes=18  # 이미지에서 본 클래스 수
-                    )
-                    print(f"✓ 커스텀 경로에서 모델 로딩 완료")
-                else:
-                    print(f"커스텀 가중치 파일을 찾을 수 없음: {custom_weight_path}")
-                    
-            except Exception as e:
-                print(f"커스텀 모델 로딩 실패: {e}")
-        
-        # 방법 3: 기본 사전 훈련된 모델 시도
-        if model is None:
-            try:
-                print("기본 사전 훈련된 모델로 시도 중...")
-                from efficientvit.seg_model_zoo import create_efficientvit_seg_model
-                
-                model = create_efficientvit_seg_model(
-                    name="efficientvit-seg-b0",
-                    dataset="cityscapes",
-                    pretrained=True
-                )
-                print("✓ 기본 사전 훈련된 모델 로딩 완료")
-                
-            except Exception as e:
-                print(f"기본 모델 로딩 실패: {e}")
-        
-        # # 방법 4: HuggingFace SegFormer 대안
-        # if model is None:
-        #     try:
-        #         print("대안으로 HuggingFace에서 SegFormer 로딩 중...")
-        #         from transformers import SegformerForSemanticSegmentation
-                
-        #         model = SegformerForSemanticSegmentation.from_pretrained(
-        #             "nvidia/segformer-b0-finetuned-cityscapes-512-1024"
-        #         )
-        #         print("✓ HuggingFace에서 SegFormer 모델 로딩 완료")
-                
-        #     except Exception as e:
-        #         print(f"HuggingFace SegFormer 실패: {e}")
-        
-        # # 방법 5: 최소 작동 모델 (최후의 수단)
-        # if model is None:
-        #     print("최소 작동 모델 생성 중...")
-            
-        #     import torch.nn as nn
-        #     import torch.nn.functional as F
-            
-        #     class MinimalSegmentationModel(nn.Module):
-        #         def __init__(self, num_classes=19):
-        #             super().__init__()
-        #             self.num_classes = num_classes
-                    
-        #             # 간단한 encoder-decoder 구조
-        #             self.encoder = nn.Sequential(
-        #                 nn.Conv2d(3, 64, 3, padding=1),
-        #                 nn.ReLU(inplace=True),
-        #                 nn.Conv2d(64, 64, 3, padding=1),
-        #                 nn.ReLU(inplace=True),
-        #                 nn.MaxPool2d(2),
-                        
-        #                 nn.Conv2d(64, 128, 3, padding=1),
-        #                 nn.ReLU(inplace=True),
-        #                 nn.Conv2d(128, 128, 3, padding=1),
-        #                 nn.ReLU(inplace=True),
-        #                 nn.MaxPool2d(2),
-                        
-        #                 nn.Conv2d(128, 256, 3, padding=1),
-        #                 nn.ReLU(inplace=True),
-        #             )
-                    
-        #             # Decoder
-        #             self.decoder = nn.Sequential(
-        #                 nn.Conv2d(256, 128, 3, padding=1),
-        #                 nn.ReLU(inplace=True),
-        #                 nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False),
-                        
-        #                 nn.Conv2d(128, 64, 3, padding=1),
-        #                 nn.ReLU(inplace=True),
-        #                 nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False),
-                        
-        #                 nn.Conv2d(64, num_classes, 1)
-        #             )
-                
-        #         def forward(self, x):
-        #             features = self.encoder(x)
-        #             output = self.decoder(features)
-                    
-        #             # 입력 크기로 리사이즈
-        #             output = F.interpolate(output, size=x.shape[2:], mode='bilinear', align_corners=False)
-        #             return output
-            
-        #     model = MinimalSegmentationModel(num_classes=19)
-        #     print("✓ 최소 작동 모델 생성 완료")
-        #     print("⚠️ 경고: 훈련되지 않은 최소 모델을 데모용으로 사용")
+            raise
         
         if model is None:
             raise RuntimeError("모든 모델 로딩 방법이 실패했습니다. 설치를 확인해주세요.")
@@ -635,35 +702,104 @@ class OptimizedEfficientViTInference:
         #                         # interpolation=cv2.INTER_LINEAR)  # 더 부드러운 보간 -> 클래스 경계에서 잘못된 중간값들이 생성됨 (실패)
         
         # return pred_resized
-        """부드러운 세그멘테이션을 위한 개선된 출력 후처리"""
-        with torch.no_grad():
-            # 모델 출력 처리
-            if isinstance(output, dict):
-                for key in ['out', 'seg', 'logits']:
-                    if key in output:
-                        logits = output[key]
-                        break
-                else:
-                    logits = list(output.values())[0]
-            else:
-                logits = output
+        # """부드러운 세그멘테이션을 위한 개선된 출력 후처리"""
+        # with torch.no_grad():
+        #     # 모델 출력 처리
+        #     if isinstance(output, dict):
+        #         for key in ['out', 'seg', 'logits']:
+        #             if key in output:
+        #                 logits = output[key]
+        #                 break
+        #         else:
+        #             logits = list(output.values())[0]
+        #     else:
+        #         logits = output
             
-            # 🔥 핵심 개선: GPU에서 바로 원본 크기로 업샘플링
-            upsampled_logits = torch.nn.functional.interpolate(
-                logits, 
-                size=original_shape[:2], 
-                mode='bilinear', 
-                align_corners=False
-            )
+        #     # 🔥 핵심 개선: GPU에서 바로 원본 크기로 업샘플링
+        #     upsampled_logits = torch.nn.functional.interpolate(
+        #         logits, 
+        #         size=original_shape[:2], 
+        #         mode='bilinear', 
+        #         # mode='bicubic',  # 마스킹 퀄리티 대안
+        #         align_corners=False
+        #     )
             
-            # 소프트맥스 및 argmax
-            probs = torch.softmax(upsampled_logits, dim=1)
-            pred = torch.argmax(probs, dim=1).squeeze()
+        #     # 소프트맥스 및 argmax
+        #     probs = torch.softmax(upsampled_logits, dim=1)
+        #     pred = torch.argmax(probs, dim=1).squeeze()
             
-            # CPU로 이동
-            pred_cpu = pred.cpu().numpy().astype(np.uint8)
+        #     # CPU로 이동
+        #     pred_cpu = pred.cpu().numpy().astype(np.uint8)
+        # """젯슨 최적화된 후처리"""
+        # # torch.no_grad() 제거 (이미 inference_mode 안에 있음)
+        # # 모델 출력 처리
+        # if isinstance(output, dict):
+        #     for key in ['out', 'seg', 'logits']:
+        #         if key in output:
+        #             logits = output[key]
+        #             break
+        #     else:
+        #         logits = list(output.values())[0]
+        # else:
+        #     logits = output
         
-        return pred_cpu
+        # # 메모리 효율적인 보간 및 argmax
+        # if logits.shape[-2:] != original_shape[:2]:
+        #     upsampled_logits = torch.nn.functional.interpolate(
+        #         logits, 
+        #         size=original_shape[:2], 
+        #         mode='bilinear',  # 또는 'bicubic'
+        #         align_corners=False
+        #     )
+        # else:
+        #     upsampled_logits = logits
+        
+        # # 소프트맥스 없이 바로 argmax (메모리/연산 절약)
+        # pred = torch.argmax(upsampled_logits, dim=1).squeeze()
+        # return pred.cpu().numpy().astype(np.uint8)
+        """🔥 개선된 후처리 - no_interpolation 옵션 지원"""
+        # 모델 출력 처리
+        if isinstance(output, dict):
+            for key in ['out', 'seg', 'logits']:
+                if key in output:
+                    logits = output[key]
+                    break
+            else:
+                logits = list(output.values())[0]
+        else:
+            logits = output
+        
+        if self.no_interpolation:
+            # 🔥 보간법 사용 안 함 - 모델 출력 크기 그대로 사용
+            print(f"Model output shape: {logits.shape[-2:]}, Original shape: {original_shape[:2]}")
+            
+            # argmax만 수행하고 리사이즈 하지 않음
+            pred = torch.argmax(logits, dim=1).squeeze()
+            pred_np = pred.cpu().numpy().astype(np.uint8)
+            
+            # 모델 출력 크기가 원본과 다르면 경고 메시지
+            if pred_np.shape != original_shape[:2]:
+                print(f"Warning: Output size {pred_np.shape} differs from original {original_shape[:2]}")
+                print("Using nearest neighbor resize to match original size...")
+                pred_np = cv2.resize(pred_np, 
+                                (original_shape[1], original_shape[0]), 
+                                interpolation=cv2.INTER_NEAREST)
+            
+            return pred_np
+        else:
+            # 🔥 기존 방식 - 보간법으로 원본 크기에 맞춤
+            if logits.shape[-2:] != original_shape[:2]:
+                upsampled_logits = torch.nn.functional.interpolate(
+                    logits, 
+                    size=original_shape[:2], 
+                    mode='bilinear',
+                    align_corners=False
+                )
+            else:
+                upsampled_logits = logits
+            
+            pred = torch.argmax(upsampled_logits, dim=1).squeeze()
+            return pred.cpu().numpy().astype(np.uint8)
     
     def create_mask_visualization(self, segmentation_mask):
         """마스크만으로 구성된 시각화 생성"""
@@ -750,33 +886,59 @@ class OptimizedEfficientViTInference:
     
     def inference_worker(self):
         """추론 워커 스레드"""
-        while True:
-            try:
-                item = self.frame_queue.get(timeout=1.0)
-                if item is None:
-                    self.result_queue.put(None)
-                    break
+        # while True:
+        #     try:
+        #         item = self.frame_queue.get(timeout=1.0)
+        #         if item is None:
+        #             self.result_queue.put(None)
+        #             break
                     
-                frame_idx, frame = item
+        #         frame_idx, frame = item
                 
-                # 추론
-                start_time = time.time()
-                input_tensor = self.preprocess_frame(frame)
+        #         # 추론
+        #         start_time = time.time()
+        #         input_tensor = self.preprocess_frame(frame)
                 
-                with torch.no_grad():
-                    output = self.model(input_tensor)
+        #         with torch.no_grad():
+        #             output = self.model(input_tensor)
                 
-                segmentation_mask = self.postprocess_output(output, frame.shape[:2])
-                inference_time = time.time() - start_time
+        #         segmentation_mask = self.postprocess_output(output, frame.shape[:2])
+        #         inference_time = time.time() - start_time
                 
-                # 결과 전송
-                self.result_queue.put((frame_idx, frame, segmentation_mask, inference_time))
+        #         # 결과 전송
+        #         self.result_queue.put((frame_idx, frame, segmentation_mask, inference_time))
                 
-            except queue.Empty:
-                continue
-            except Exception as e:
-                print(f"Inference error: {e}")
-                continue
+        #     except queue.Empty:
+        #         continue
+        #     except Exception as e:
+        #         print(f"Inference error: {e}")
+        #         continue
+        with torch.inference_mode():  # torch.no_grad() 대신 사용
+            while True:
+                try:
+                    item = self.frame_queue.get(timeout=1.0)
+                    if item is None:
+                        self.result_queue.put(None)
+                        break
+                        
+                    frame_idx, frame = item
+                    
+                    # 추론
+                    start_time = time.time()
+                    input_tensor = self.preprocess_frame(frame)
+                    
+                    output = self.model(input_tensor)  # torch.no_grad() 제거 (이미 inference_mode 안)
+                    
+                    segmentation_mask = self.postprocess_output(output, frame.shape[:2])
+                    inference_time = time.time() - start_time
+                    
+                    self.result_queue.put((frame_idx, frame, segmentation_mask, inference_time))
+                    
+                except queue.Empty:
+                    continue
+                except Exception as e:
+                    print(f"Inference error: {e}")
+                    continue
     
     def process_video_optimized(self, input_path, output_path, save_frames=False, save_masks=False,
                               show_stats=True, multithreading=True):
@@ -802,6 +964,8 @@ class OptimizedEfficientViTInference:
         print(f"Duration: {total_frames/fps:.1f} seconds")
         print(f"Multithreading: {multithreading}")
         print(f"Output mode: {'Masks only' if masks_only else 'Overlay'}")  # 🔥 모드 표시
+        print(f"Model input size: {self.input_size}")  # 추가
+        print(f"No interpolation: {self.no_interpolation}")  # 추가
         
         # 출력 비디오 설정
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
@@ -946,86 +1110,143 @@ class OptimizedEfficientViTInference:
                 pbar.close()
         
         else:
-            # 단일 스레드 처리 (안정성 우선)# 🔥 단일 스레드 처리 부분도 동일하게 수정
-            pbar = tqdm(total=total_frames, desc="Processing")
+            # # 단일 스레드 처리 (안정성 우선)# 🔥 단일 스레드 처리 부분도 동일하게 수정
+            # pbar = tqdm(total=total_frames, desc="Processing")
             
-            for frame_idx in range(total_frames):
-                ret, frame = cap.read()
-                if not ret:
-                    break
+            # for frame_idx in range(total_frames):
+            #     ret, frame = cap.read()
+            #     if not ret:
+            #         break
                 
-                # 추론
-                start_time = time.time()
-                input_tensor = self.preprocess_frame(frame)
+            #     # 추론
+            #     start_time = time.time()
+            #     input_tensor = self.preprocess_frame(frame)
                 
-                with torch.no_grad():
+            #     with torch.no_grad():
+            #         output = self.model(input_tensor)
+                
+            #     segmentation_mask = self.postprocess_output(output, frame.shape[:2])
+            #     inference_time = time.time() - start_time
+            #     inference_times.append(inference_time)
+                
+            #     # # 오버레이 생성 (원본 + 마스크)
+            #     # overlay, class_info = self.create_enhanced_overlay(frame, segmentation_mask)
+                
+            #     # # 마스크만 생성 (save_masks 옵션)
+            #     # if save_masks or mask_out:
+            #     #     mask_only, _ = self.create_mask_visualization(segmentation_mask)
+            #     # 🔥 masks_only에 따라 다른 처리
+            #     if masks_only:
+            #         # final_output, class_info = self.create_mask_visualization(segmentation_mask)
+            #         final_output, class_info = self.create_opencv_bitwise_mask_visualization(segmentation_mask)
+            #     else:
+            #         final_output, class_info = self.create_enhanced_overlay(frame, segmentation_mask)
+                
+            #     # 통계 수집
+            #     for class_name, count in class_info.items():
+            #         if class_name not in class_statistics:
+            #             class_statistics[class_name] = []
+            #         class_statistics[class_name].append(count)
+                
+            #     # # 성능 정보 표시
+            #     # if show_stats:
+            #     #     fps_text = f"FPS: {1/inference_time:.1f}"
+            #     #     model_text = f"Model: {self.model_name}"
+            #     #     cv2.putText(overlay, fps_text, (10, 30), 
+            #     #                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+            #     #     cv2.putText(overlay, model_text, (10, 60), 
+            #     #                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+            #     # 성능 정보 표시 (마스크 모드일 때는 표시하지 않음)
+            #     if show_stats and not masks_only:
+            #         fps_text = f"FPS: {1/inference_time:.1f}"
+            #         model_text = f"Model: {self.model_name}"
+            #         cv2.putText(final_output, fps_text, (10, 30), 
+            #                 cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+            #         cv2.putText(final_output, model_text, (10, 60), 
+            #                 cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+                
+            #     # # 비디오 저장
+            #     # out.write(overlay)
+            #     # 🔥 비디오 저장
+            #     out.write(final_output)
+                
+            #     # # 개별 프레임/마스크 저장
+            #     # if save_frames:
+            #     #     cv2.imwrite(str(frames_dir / f"frame_{frame_idx:06d}.jpg"), overlay)
+            #     # if save_masks:
+            #     #     cv2.imwrite(str(masks_dir / f"mask_{frame_idx:06d}.png"), mask_only)
+            #     # 개별 프레임 저장
+            #     if save_frames:
+            #         if masks_only:
+            #             cv2.imwrite(str(frames_dir / f"mask_{frame_idx:06d}.png"), final_output)
+            #         else:
+            #             cv2.imwrite(str(frames_dir / f"frame_{frame_idx:06d}.jpg"), final_output)
+                
+            #     pbar.update(1)
+                
+            #     # 메모리 관리
+            #     if frame_idx % 30 == 0:
+            #         torch.cuda.empty_cache() if torch.cuda.is_available() else None
+            #         gc.collect()
+            
+            # pbar.close()
+            # 단일 스레드 처리 부분에서도 적용
+            with torch.inference_mode():  # 전체 추론 루프를 감쌈
+                pbar = tqdm(total=total_frames, desc="Processing")
+                
+                for frame_idx in range(total_frames):
+                    ret, frame = cap.read()
+                    if not ret:
+                        break
+                    
+                    # 추론 - 모든 처리가 for 루프 안에 있어야 함
+                    start_time = time.time()
+                    input_tensor = self.preprocess_frame(frame)
                     output = self.model(input_tensor)
-                
-                segmentation_mask = self.postprocess_output(output, frame.shape[:2])
-                inference_time = time.time() - start_time
-                inference_times.append(inference_time)
-                
-                # # 오버레이 생성 (원본 + 마스크)
-                # overlay, class_info = self.create_enhanced_overlay(frame, segmentation_mask)
-                
-                # # 마스크만 생성 (save_masks 옵션)
-                # if save_masks or mask_out:
-                #     mask_only, _ = self.create_mask_visualization(segmentation_mask)
-                # 🔥 masks_only에 따라 다른 처리
-                if masks_only:
-                    # final_output, class_info = self.create_mask_visualization(segmentation_mask)
-                    final_output, class_info = self.create_opencv_bitwise_mask_visualization(segmentation_mask)
-                else:
-                    final_output, class_info = self.create_enhanced_overlay(frame, segmentation_mask)
-                
-                # 통계 수집
-                for class_name, count in class_info.items():
-                    if class_name not in class_statistics:
-                        class_statistics[class_name] = []
-                    class_statistics[class_name].append(count)
-                
-                # # 성능 정보 표시
-                # if show_stats:
-                #     fps_text = f"FPS: {1/inference_time:.1f}"
-                #     model_text = f"Model: {self.model_name}"
-                #     cv2.putText(overlay, fps_text, (10, 30), 
-                #                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-                #     cv2.putText(overlay, model_text, (10, 60), 
-                #                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-                # 성능 정보 표시 (마스크 모드일 때는 표시하지 않음)
-                if show_stats and not masks_only:
-                    fps_text = f"FPS: {1/inference_time:.1f}"
-                    model_text = f"Model: {self.model_name}"
-                    cv2.putText(final_output, fps_text, (10, 30), 
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-                    cv2.putText(final_output, model_text, (10, 60), 
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-                
-                # # 비디오 저장
-                # out.write(overlay)
-                # 🔥 비디오 저장
-                out.write(final_output)
-                
-                # # 개별 프레임/마스크 저장
-                # if save_frames:
-                #     cv2.imwrite(str(frames_dir / f"frame_{frame_idx:06d}.jpg"), overlay)
-                # if save_masks:
-                #     cv2.imwrite(str(masks_dir / f"mask_{frame_idx:06d}.png"), mask_only)
-                # 개별 프레임 저장
-                if save_frames:
+                    
+                    segmentation_mask = self.postprocess_output(output, frame.shape[:2])
+                    inference_time = time.time() - start_time
+                    inference_times.append(inference_time)
+                    
+                    # masks_only에 따라 다른 처리
                     if masks_only:
-                        cv2.imwrite(str(frames_dir / f"mask_{frame_idx:06d}.png"), final_output)
+                        final_output, class_info = self.create_opencv_bitwise_mask_visualization(segmentation_mask)
                     else:
-                        cv2.imwrite(str(frames_dir / f"frame_{frame_idx:06d}.jpg"), final_output)
+                        final_output, class_info = self.create_enhanced_overlay(frame, segmentation_mask)
+                    
+                    # 통계 수집
+                    for class_name, count in class_info.items():
+                        if class_name not in class_statistics:
+                            class_statistics[class_name] = []
+                        class_statistics[class_name].append(count)
+                    
+                    # 성능 정보 표시 (마스크 모드일 때는 표시하지 않음)
+                    if show_stats and not masks_only:
+                        fps_text = f"FPS: {1/inference_time:.1f}"
+                        model_text = f"Model: {self.model_name}"
+                        cv2.putText(final_output, fps_text, (10, 30), 
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+                        cv2.putText(final_output, model_text, (10, 60), 
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+                    
+                    # 비디오 저장
+                    out.write(final_output)
+                    
+                    # 개별 프레임 저장
+                    if save_frames:
+                        if masks_only:
+                            cv2.imwrite(str(frames_dir / f"mask_{frame_idx:06d}.png"), final_output)
+                        else:
+                            cv2.imwrite(str(frames_dir / f"frame_{frame_idx:06d}.jpg"), final_output)
+                    
+                    pbar.update(1)
+                    
+                    # 메모리 관리
+                    if frame_idx % 30 == 0:
+                        torch.cuda.empty_cache() if torch.cuda.is_available() else None
+                        gc.collect()
                 
-                pbar.update(1)
-                
-                # 메모리 관리
-                if frame_idx % 30 == 0:
-                    torch.cuda.empty_cache() if torch.cuda.is_available() else None
-                    gc.collect()
-            
-            pbar.close()
+                pbar.close()
         
         # 리소스 정리
         cap.release()
@@ -1054,6 +1275,8 @@ class OptimizedEfficientViTInference:
         """성능 통계 출력"""
         print(f"\n=== Performance Statistics ===")
         print(f"Model: {self.model_name} ({self.model_info['params']})")
+        print(f"Input size: {self.input_size}")  # 이 줄 추가
+        print(f"No interpolation: {self.no_interpolation}")  # 이 줄 추가
         print(f"Total frames processed: {len(inference_times)}")
         
         if inference_times:
@@ -1071,7 +1294,8 @@ class OptimizedEfficientViTInference:
             if counts:  # 빈 리스트가 아닌 경우만
                 avg_pixels = np.mean(counts)
                 max_pixels = np.max(counts)
-                percentage = (avg_pixels / (512 * 512)) * 100  # 입력 크기 기준
+                # percentage = (avg_pixels / (512 * 512)) * 100  # 입력 크기 기준
+                percentage = (avg_pixels / (self.input_size[0] * self.input_size[1])) * 100  # 입력 크기 기준
                 # 해당 클래스의 색깔 찾기
                 color_info = ""
                 if class_name in self.class_names:
@@ -1263,7 +1487,19 @@ class OptimizedEfficientViTInference:
                 # 🚀 OpenCV bitwise_or로 합성
                 result = cv2.bitwise_or(result, masked_color)
         
+        # 🔥 통계 완전 생략
         return result, {}
+
+def parse_input_size(size_str):
+    """입력 크기 문자열을 파싱 (예: '720x1280' -> (720, 1280))"""
+    try:
+        parts = size_str.split('x')
+        if len(parts) != 2:
+            raise ValueError("Invalid format")
+        height, width = int(parts[0]), int(parts[1])
+        return (height, width)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"Invalid input size format: {size_str}. Use format like '720x1280'")
 
 def main():
     parser = argparse.ArgumentParser(description="Optimized EfficientViT Segmentation for Jetson")
@@ -1285,12 +1521,23 @@ def main():
                        choices=["auto", "cityscapes", "ade20k", "pascal_voc", "custom_walkway"],
                        help="Class mapping dataset (auto: detect from model output)")
     parser.add_argument("--show-classes", action="store_true", help="Show detected classes and exit")
+    # 🔥 새로운 옵션들 추가
+    parser.add_argument("--input-size", type=parse_input_size, 
+                       help="Custom model input size (format: HEIGHTxWIDTH, e.g., 720x1280)")
+    parser.add_argument("--no-interpolation", action="store_true", 
+                       help="Skip interpolation in postprocessing (use model output size as-is)")
     
     args = parser.parse_args()
     
     # 모델 목록 출력
     if args.list_models:
         EfficientViTModelManager.list_models()
+        if args.input_size or args.no_interpolation:
+            print("\n=== Custom Resolution Options ===")
+            print("--input-size: Set custom model input resolution (e.g., --input-size 720x1280)")
+            print("--no-interpolation: Skip interpolation in postprocessing")
+            print("\nExample usage:")
+            print("python script.py --input video.mp4 --input-size 720x1280 --no-interpolation")
         return
     
     # 입력 파일 확인
@@ -1304,7 +1551,10 @@ def main():
             model_name=args.model, 
             device=args.device,
             optimize_jetson=not args.no_optimize,
-            class_mapping=args.class_mapping
+            # class_mapping=args.class_mapping
+            class_mapping=args.class_mapping,
+            custom_input_size=args.input_size,  # 🔥 새로운 파라미터
+            no_interpolation=args.no_interpolation  # 🔥 새로운 파라미터
         )
         
         # 클래스 정보만 출력하고 종료
