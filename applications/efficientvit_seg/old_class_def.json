@@ -1,0 +1,52 @@
+{
+    "classes": [
+        "sidewalk",
+
+
+
+
+        "curb",
+        "curb-cut",
+        "crosswalk",
+        "road",
+
+        "minor-road",
+        "bike-lane",
+        "terrain",
+        "cautious-zone",
+        "repair-zone",
+        "car-four-wheeled",
+        "motorcycle",
+        "micromobility",
+        "other-vehicle",
+
+        "person",
+        "pothole",
+        "manhole",
+        "drain",
+        "background"
+
+    ],
+    "class_colors": [
+        [255, 0, 0],
+        [0, 255, 0],
+        [0, 0, 255],
+        [255, 255, 0],
+        [0, 255, 255],
+        [255, 0, 255],
+        [192, 192, 192],
+        [128, 128, 128],
+        [128, 0, 0],
+        [128, 128, 0],
+        [0, 128, 0],
+        [128, 0, 128],
+        [0, 128, 128],
+        [0, 0, 128],
+        [255, 165, 0],
+        [255, 215, 0],
+        [173, 255, 47],
+        [154, 205, 50],
+        [107, 142, 35]
+
+    ]
+}

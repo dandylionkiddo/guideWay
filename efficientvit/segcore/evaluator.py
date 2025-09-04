@@ -240,24 +240,92 @@ class Evaluator:
 
     def summarize_results(self) -> dict[str, Any]:
         """
-        누적된 통계치를 바탕으로 최종 성능 지표를 계산하고, 결과를 JSON 파일로 저장합니다.
+        누적된 통계치를 바탕으로 최종 성능 지표를 계산하고, 결과를 JSON 파일로 저장하며,
+        마크다운 보고서를 생성합니다.
 
         Returns:
             dict[str, Any]: 최종 성능 지표 딕셔너리.
         """
         results = {}
+        markdown_lines = ["# Evaluation Summary\n"]
+
         if "calculate_miou" in self.tasks:
-            # 참고: 아래 코드는 디버깅 목적으로 각 클래스의 IoU 정보를 상세히 출력합니다.
             print("\n--- IoU Debug Info ---")
+            markdown_lines.append("## IoU Details")
+            markdown_lines.append("| Class ID | Class Name | Union | Intersection | IoU |")
+            markdown_lines.append("|:---:|:---|:---:|:---:|:---:|")
+
             class_names = self.data_loader.dataset.classes
             union_sum = self.union_meter.sum.cpu().numpy()
             intersection_sum = self.intersection_meter.sum.cpu().numpy()
+            
+            low_iou_classes = []
+            mid_iou_classes = []
+            high_iou_classes = []
+            
+            ious_all_valid = []
+
             for i, name in enumerate(class_names):
-                print(f"  - Class {i:02d} ({name:<25}): Union = {union_sum[i]}, Intersection = {intersection_sum[i]}")
+                iou = 0.0
+                if union_sum[i] > 0:
+                    iou = intersection_sum[i] / union_sum[i]
+                    ious_all_valid.append(iou)
+
+                print(f"  - Class {i:02d} ({name:<25}): Union = {union_sum[i]}, Intersection = {intersection_sum[i]}, IoU = {iou:.4f}")
+                markdown_lines.append(f"| {i:02d} | {name} | {union_sum[i]:.1f} | {intersection_sum[i]:.1f} | {iou:.4f} |")
+                
+                if union_sum[i] > 0:
+                    if iou <= 0.1:
+                        low_iou_classes.append(name)
+                    elif iou <= 0.5:
+                        mid_iou_classes.append(name)
+                    else: # iou > 0.5
+                        high_iou_classes.append(name)
+
             print("----------------------\n")
+            markdown_lines.append("\n## IoU-based Class Groups\n")
+
+            if low_iou_classes:
+                print("--- Classes with IoU <= 0.1 ---")
+                markdown_lines.append("### Classes with IoU <= 0.1")
+                for name in low_iou_classes:
+                    print(f"  - {name}")
+                    markdown_lines.append(f"- {name}")
+                print("---------------------------------\n")
+                markdown_lines.append("")
+
+            if mid_iou_classes:
+                print("--- Classes with 0.1 < IoU <= 0.5 ---")
+                markdown_lines.append("### Classes with 0.1 < IoU <= 0.5")
+                for name in mid_iou_classes:
+                    print(f"  - {name}")
+                    markdown_lines.append(f"- {name}")
+                print("-------------------------------------\n")
+                markdown_lines.append("")
+            
+            if high_iou_classes:
+                print("--- Classes with IoU > 0.5 ---")
+                markdown_lines.append("### Classes with IoU > 0.5")
+                for name in high_iou_classes:
+                    print(f"  - {name}")
+                    markdown_lines.append(f"- {name}")
+                print("----------------------------------\n")
+                markdown_lines.append("")
+
+            markdown_lines.append("## mIoU Results\n")
+            iou_values_over_0_1 = [iou for iou in ious_all_valid if iou > 0.1]
+            if iou_values_over_0_1:
+                miou_over_0_1 = (sum(iou_values_over_0_1) / len(iou_values_over_0_1)) * 100
+                print(f"--- mIoU (IoU > 0.1): {miou_over_0_1:.3f}% ---\n")
+                markdown_lines.append(f"- **mIoU (IoU > 0.1):** {miou_over_0_1:.3f}%\n")
+
+            iou_values_over_0_5 = [iou for iou in ious_all_valid if iou > 0.5]
+            if iou_values_over_0_5:
+                miou_over_0_5 = (sum(iou_values_over_0_5) / len(iou_values_over_0_5)) * 100
+                print(f"--- mIoU (IoU > 0.5): {miou_over_0_5:.3f}% ---\n")
+                markdown_lines.append(f"- **mIoU (IoU > 0.5):** {miou_over_0_5:.3f}%\n")
 
             iou_per_class = self.intersection_meter.sum / self.union_meter.sum
-            # 합집합(union)이 0인 클래스는 mIoU 계산에서 제외하여 0으로 나누는 것을 방지합니다.
             valid_classes_mask = self.union_meter.sum > 0
             
             if valid_classes_mask.sum() > 0:
@@ -265,15 +333,23 @@ class Evaluator:
             else:
                 miou = 0.0
             results["mIOU"] = miou
+            markdown_lines.append(f"- **Overall mIoU (all valid classes):** {miou:.3f}%\n")
 
         if "calculate_fps" in self.tasks:
             total_images = self.time_meter.get_count() * self.data_loader.batch_size
             fps = total_images / self.time_meter.sum
             results["fps"] = fps
+            markdown_lines.append("## Performance")
+            markdown_lines.append(f"- **Inference FPS:** {fps:.2f}")
 
         if self.run_dir:
             summary_path = os.path.join(self.run_dir, "summary.json")
             with open(summary_path, "w") as f:
                 json.dump(results, f, indent=4)
+            
+            report_path = os.path.join(self.run_dir, "evaluation_report.md")
+            with open(report_path, "w", encoding="utf-8") as f:
+                f.write("\n".join(markdown_lines))
+            print(f"\nMarkdown report saved to {report_path}")
 
         return results
