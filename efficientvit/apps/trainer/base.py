@@ -162,7 +162,11 @@ class Trainer:
             return
 
         # 체크포인트에서 각 컴포넌트의 상태를 로드
-        self.network.load_state_dict(checkpoint["state_dict"])
+        if "state_dict" in checkpoint:
+            self.network.load_state_dict(checkpoint["state_dict"])
+        else:
+            # Assume the loaded checkpoint is the state_dict itself
+            self.network.load_state_dict(checkpoint)
         
         log = []
         if "epoch" in checkpoint:
@@ -213,7 +217,7 @@ class Trainer:
         """
         raise NotImplementedError
 
-    def validate(self, model: Optional[nn.Module] = None, data_loader: Optional[Any] = None, is_test: bool = True, epoch: int = 0) -> dict[str, Any]:
+    def validate(self, model: Optional[nn.Module] = None, data_loader: Optional[Any] = None, is_test: bool = True, epoch: int = 0, detailed_analysis: bool = False) -> dict[str, Any]:
         """
         검증을 수행하는 래퍼(wrapper) 함수.
         평가할 모델과 데이터로더를 준비하고 `_validate`를 호출합니다.
@@ -232,7 +236,7 @@ class Trainer:
             data_loader = self.data_provider.test if is_test else self.data_provider.valid
 
         model.eval()
-        return self._validate(model, data_loader, epoch)
+        return self._validate(model, data_loader, epoch, detailed_analysis)
 
     def multires_validate(self, eval_image_size: Optional[list[int]] = None, **kwargs) -> dict[str, dict[str, Any]]:
         """

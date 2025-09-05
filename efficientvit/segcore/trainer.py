@@ -6,6 +6,12 @@ import torch.nn.functional as F
 from tqdm import tqdm
 import sys
 import numpy as np
+import cv2
+from PIL import Image
+import time
+import json
+from datetime import datetime
+import os
 
 from efficientvit.apps.trainer import Trainer
 from efficientvit.apps.utils import AverageMeter, is_master, sync_tensor
@@ -34,6 +40,30 @@ def _fast_hist(label_true: np.ndarray, label_pred: np.ndarray, n_class: int) -> 
         minlength=n_class**2,
     ).reshape(n_class, n_class)
     return hist
+
+
+def get_canvas(
+    image: np.ndarray,
+    mask: np.ndarray,
+    colors: tuple | list,
+    opacity: float = 0.5,
+) -> np.ndarray:
+    image_shape = image.shape[:2]
+    mask_shape = mask.shape
+    if image_shape != mask_shape:
+        mask = cv2.resize(mask, dsize=(image_shape[1], image_shape[0]), interpolation=cv2.INTER_NEAREST)
+    
+    if colors is None:
+        colors = np.random.randint(0, 255, size=(256, 3), dtype=np.uint8)
+
+    seg_mask = np.zeros_like(image, dtype=np.uint8)
+    for k, color in enumerate(colors):
+        if k < len(colors):
+            seg_mask[mask == k, :] = color
+            
+    canvas = seg_mask * opacity + image * (1 - opacity)
+    canvas = np.asarray(canvas, dtype=np.uint8)
+    return canvas
 
 
 class SegTrainer(Trainer):
@@ -126,7 +156,7 @@ class SegTrainer(Trainer):
         lbl = lbl.to("cuda", non_blocking=True)
         return {"image": img, "label": lbl}
 
-    def _validate(self, model: nn.Module, data_loader: Any, epoch: int) -> dict[str, float]:
+    def _validate(self, model: nn.Module, data_loader: Any, epoch: int, detailed_analysis: bool = False) -> dict[str, float]:
         """
         검증 데이터셋을 사용하여 모델의 성능을 평가합니다.
 
@@ -134,12 +164,14 @@ class SegTrainer(Trainer):
             model (nn.Module): 평가할 모델.
             data_loader (Any): 검증 데이터로더.
             epoch (int): 현재 에폭 번호 (로깅용).
+            detailed_analysis (bool): 상세 결과(이미지 저장용 데이터)를 수집할지 여부.
 
         Returns:
-            dict[str, float]: 검증 결과 (손실, mIoU, 클래스별 상세 지표)를 담은 딕셔너리.
+            dict[str, float]: 검증 결과 (손실, mIoU, 클래스별 상세 지표 등)를 담은 딕셔너리.
         """
         val_loss = AverageMeter()
         hist = np.zeros((self.n_classes, self.n_classes))
+        eval_results_list = [] # 상세 결과 저장을 위한 리스트
 
         printed_label_shape = False
         model.eval()  # 모델을 평가 모드로 설정
@@ -165,6 +197,15 @@ class SegTrainer(Trainer):
                         print(f"[Trainer Validation] Label shape: {labels.shape}")
                         printed_label_shape = True
                     hist += _fast_hist(labels.cpu().numpy(), pred.cpu().numpy(), self.n_classes)
+
+                    if detailed_analysis:
+                        for i in range(images.size(0)):
+                            eval_results_list.append({
+                                "image_path": sample["image_path"][i],
+                                "index": sample["index"][i].item(),
+                                "pred": pred[i].cpu().numpy(),
+                                "gt": labels[i].cpu().numpy(),
+                            })
 
                     t.set_postfix({"loss": val_loss.avg, "bs": images.shape[0]})
                     t.update()
@@ -209,7 +250,98 @@ class SegTrainer(Trainer):
             results[f"val_intersection_{class_name}"] = intersection[i]
             results[f"val_union_{class_name}"] = union[i]
 
+        if detailed_analysis:
+            results["hist"] = hist
+            results["eval_results_list"] = eval_results_list
+
         return results
+
+    def summarize_and_save_eval_results(self, hist: np.ndarray, eval_results_list: list, save_path: str) -> None:
+        if not is_master():
+            return
+
+        # 1. 결과 저장 디렉토리 생성
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        run_dir = os.path.join(save_path, timestamp)
+        labeled_dir = os.path.join(run_dir, "labeled_images")
+        os.makedirs(labeled_dir, exist_ok=True)
+        print(f"Saving detailed evaluation results to {run_dir}")
+
+        # 2. 마크다운 리포트 생성 로직 (evaluator.py에서 가져옴)
+        markdown_lines = ["# Evaluation Summary\n"]
+        markdown_lines.append("## IoU Details")
+        markdown_lines.append("| Class ID | Class Name | Union | Intersection | IoU |")
+        markdown_lines.append("|:---:|:---|:---:|:---:|:---:|")
+
+        class_names = self.data_provider.classes
+        union_sum = hist.sum(axis=1) + hist.sum(axis=0) - np.diag(hist)
+        intersection_sum = np.diag(hist)
+        
+        low_iou_classes, mid_iou_classes, high_iou_classes = [], [], []
+        ious_all_valid = []
+
+        for i, name in enumerate(class_names):
+            iou = 0.0
+            if union_sum[i] > 0:
+                iou = intersection_sum[i] / union_sum[i]
+                ious_all_valid.append(iou)
+            markdown_lines.append(f"| {i:02d} | {name} | {union_sum[i]:.1f} | {intersection_sum[i]:.1f} | {iou:.4f} |")
+            if union_sum[i] > 0:
+                if iou <= 0.1: low_iou_classes.append(name)
+                elif iou <= 0.5: mid_iou_classes.append(name)
+                else: high_iou_classes.append(name)
+
+        markdown_lines.append("\n## IoU-based Class Groups\n")
+
+        if low_iou_classes:
+            markdown_lines.append("### Classes with IoU <= 0.1")
+            for name in low_iou_classes:
+                markdown_lines.append(f"- {name}")
+            markdown_lines.append("")
+
+        if mid_iou_classes:
+            markdown_lines.append("### Classes with 0.1 < IoU <= 0.5")
+            for name in mid_iou_classes:
+                markdown_lines.append(f"- {name}")
+            markdown_lines.append("")
+        
+        if high_iou_classes:
+            markdown_lines.append("### Classes with IoU > 0.5")
+            for name in high_iou_classes:
+                markdown_lines.append(f"- {name}")
+            markdown_lines.append("")
+
+        markdown_lines.append("## mIoU Results\n")
+        iou_values_over_0_1 = [iou for iou in ious_all_valid if iou > 0.1]
+        if iou_values_over_0_1:
+            miou_over_0_1 = (sum(iou_values_over_0_1) / len(iou_values_over_0_1)) * 100
+            markdown_lines.append(f"- **mIoU (IoU > 0.1):** {miou_over_0_1:.3f}%\n")
+
+        iou_values_over_0_5 = [iou for iou in ious_all_valid if iou > 0.5]
+        if iou_values_over_0_5:
+            miou_over_0_5 = (sum(iou_values_over_0_5) / len(iou_values_over_0_5)) * 100
+            markdown_lines.append(f"- **mIoU (IoU > 0.5):** {miou_over_0_5:.3f}%\n")
+
+        miou = np.nanmean(ious_all_valid) * 100 if ious_all_valid else 0.0
+        markdown_lines.append(f"- **Overall mIoU (all valid classes):** {miou:.3f}%\n")
+
+        # 3. 마크다운 파일 저장
+        report_path = os.path.join(run_dir, "evaluation_report.md")
+        with open(report_path, "w", encoding="utf-8") as f:
+            f.write("\n".join(markdown_lines))
+        print(f"Markdown report saved to {report_path}")
+
+        # 4. 이미지 파일 저장
+        with tqdm(total=len(eval_results_list), desc="Saving result images") as t:
+            for result in eval_results_list:
+                raw_image = np.array(Image.open(result["image_path"]).convert("RGB"))
+                # GT 이미지
+                gt_canvas = get_canvas(raw_image, result["gt"], self.data_provider.class_colors)
+                Image.fromarray(gt_canvas).save(os.path.join(labeled_dir, f"{result['index']}_gt.png"))
+                # Pred 이미지
+                pred_canvas = get_canvas(raw_image, result["pred"], self.data_provider.class_colors)
+                Image.fromarray(pred_canvas).save(os.path.join(labeled_dir, f"{result['index']}_pred.png"))
+                t.update()
 
     def run_step(self, feed_dict: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
         """

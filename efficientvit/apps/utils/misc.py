@@ -30,32 +30,37 @@ def parse_unknown_args(unknown: list) -> dict:
     index = 0
     parsed_dict = {}
     while index < len(unknown):
-        key, val = unknown[index], unknown[index + 1]
-        index += 2
+        key = unknown[index]
         if not key.startswith("--"):
+            index += 1 # Skip non-flag arguments
             continue
-        key = key[2:]
+        key = key[2:] # Remove --
 
-        # try parsing with either dot notation or full yaml notation
-        # Note that the vanilla case "--key value" will be parsed the same
-        if "." in key:
-            # key == a.b.c, val == val --> parsed_dict[a][b][c] = val
-            keys = key.split(".")
-            dict_to_update = parsed_dict
-            for key in keys[:-1]:
-                if not (key in dict_to_update and isinstance(dict_to_update[key], dict)):
-                    dict_to_update[key] = {}
-                dict_to_update = dict_to_update[key]
-            dict_to_update[keys[-1]] = parse_with_yaml(val)  # so we can parse lists, bools, etc...
-        else:
+        # Check if it's a boolean flag or a key-value pair
+        if index + 1 < len(unknown) and not unknown[index + 1].startswith("--"):
+            # It's a key-value pair
+            val = unknown[index + 1]
             parsed_dict[key] = parse_with_yaml(val)
+            index += 2
+        else:
+            # It's a boolean flag (e.g., --eval_only) or last argument
+            # We assume boolean flags are handled by argparse directly
+            # So, if it's an unknown standalone flag, we ignore it for opt_args
+            index += 1
     return parsed_dict
 
 
 def partial_update_config(config: dict, partial_config: dict) -> dict:
     for key in partial_config:
-        if key in config and isinstance(partial_config[key], dict) and isinstance(config[key], dict):
+        
+
+        # If the key exists in config, and both are dictionaries, recurse
+        if key in config and isinstance(config[key], dict) and isinstance(partial_config[key], dict):
             partial_update_config(config[key], partial_config[key])
+        # If the key exists in config, and config[key] is a list, but partial_config[key] is a dict, overwrite the list with the dict
+        elif key in config and isinstance(config[key], list) and isinstance(partial_config[key], dict):
+            config[key] = partial_config[key]
+        # Otherwise (key not in config, or types don't match, or one is not a dict), just overwrite
         else:
             config[key] = partial_config[key]
     return config

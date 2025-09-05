@@ -18,7 +18,7 @@ from efficientvit.apps.setup import (
     setup_run_config,  # RunConfig 객체 생성
     init_model,  # 모델 가중치 초기화
 )
-from efficientvit.apps.utils import get_dist_size  # 분산 학습 시 전체 GPU 개수 확인
+from efficientvit.apps.utils import get_dist_size, is_master, parse_unknown_args  # 분산 학습 시 전체 GPU 개수 확인
 from efficientvit.models.efficientvit import seg as models  # Segmentation 모델 아키텍처
 from efficientvit.segcore.data_provider import SegDataProvider  # Segmentation 데이터 처리기
 from efficientvit.segcore.trainer import SegTrainer  # Segmentation 학습 로직 담당 트레이너
@@ -47,6 +47,9 @@ parser.add_argument(
     choices=["efficientvit", "segformer"],
     help="사용할 모델 아키텍처 선택 (efficientvit 또는 segformer)",
 )
+parser.add_argument("--eval_only", action="store_true", help="평가 모드만 실행")
+parser.add_argument("--eval_checkpoint", type=str, default=None, help="평가할 체크포인트 파일 경로")
+parser.add_argument("--save_eval_results", action="store_true", help="평가 결과 저장")
 
 def main() -> None:
     """
@@ -67,7 +70,7 @@ def main() -> None:
     # 2. 실험 환경 설정
     # `setup_exp_config` 함수는 YAML 파일을 로드하고, `opt_args`로 받은 값으로
     # 설정을 덮어써서 최종 실험 설정을 확정합니다.
-    exp_config = setup_exp_config(args.config, opt_args=opt_args)
+    exp_config = setup_exp_config(args.config, opt_args=parse_unknown_args(opt_args))
 
     # 3. 데이터 프로바이더 설정
     # `setup_data_provider`는 `exp_config`의 'data_provider' 섹션을 기반으로
@@ -126,8 +129,25 @@ def main() -> None:
     # 8. 학습 시작
     # `prep_for_training`: 옵티마이저, 스케줄러, 분산 학습 설정, AMP(Automatic Mixed Precision) 등 학습 전 준비
     trainer.prep_for_training(run_config, ema_decay=0.9998, amp="fp16")
-    # `load_model`: 저장된 체크포인트가 있으면 이어서 학습하기 위해 로드
-    trainer.load_model()
+    # `load_model`은 가장 최근 체크포인트를 자동으로 불러옵니다.
+    # `--eval_checkpoint` 인자가 주어지면, 해당 경로의 체크포인트를 불러옵니다.
+    trainer.load_model(model_fname=args.eval_checkpoint)
+
+    # 평가 모드일 경우, 상세 평가를 수행하고 종료합니다.
+    if args.eval_only:
+        if is_master():
+            print("Running in evaluation-only mode...")
+        # `validate` 함수를 `detailed_analysis=True`로 호출합니다.
+        val_results = trainer.validate(epoch=trainer.start_epoch, is_test=False, detailed_analysis=True)
+        if args.save_eval_results:
+            # `summarize_and_save_eval_results`를 호출하여 리포트와 이미지를 저장합니다.
+            trainer.summarize_and_save_eval_results(
+                hist=val_results["hist"],
+                eval_results_list=val_results["eval_results_list"],
+                save_path=os.path.join(args.path, "eval_results"),
+            )
+        return # 학습을 시작하지 않고 종료
+
     # `train`: 본격적인 학습 루프 시작
     trainer.train()
 

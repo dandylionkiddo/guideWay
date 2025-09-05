@@ -14,7 +14,7 @@ data_provider:
 
   # SegDataProvider가 데이터셋 구조를 파악하는 데 사용하는 정보
   train_split: training # 평가 시 사용되지 않음
-  val_split: validation   # 평가 시 사용할 데이터 분할
+  val_split: testing   # 평가 시 사용할 데이터 분할
   image_dir_name: images
   label_dir_name: labels
   image_suffix: .jpg
@@ -28,12 +28,12 @@ data_provider:
 
 # 모델 설정 (기존 설정 유지)
 model:
-  name: "segformer-b0"
+  name: "efficientvit-seg-l1"
   n_classes: 20
-  weight_url: "D:/AIffel/EfficientViT/efficientvit/output/final_models/segformer-cp.pt"
+  weight_url: "D:/AIffel/EfficientViT/efficientvit/output/final_models/efficientvit-l1-combo/ft-0.0005-coloraug.pt"
 
 # 평가 결과 저장 경로
-save_path: "./output/eval_results/segformer-b0"
+save_path: "./output/eval_results/efficientvit-l1-combo/ft-0.0005-coloraug"
 
 # 저장 옵션
 saving:
