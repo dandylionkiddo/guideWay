@@ -143,7 +143,8 @@ class EfficientViTModelManager:
 
 class OptimizedEfficientViTInference:
     def __init__(self, model_name="efficientvit_seg_b0", device="cuda", optimize_jetson=True, 
-                 class_mapping="auto"):
+                #  class_mapping="auto"):
+                 class_mapping="auto", custom_input_size=None, no_interpolation=False):
         print(f"\n=== Initializing EfficientViT Inference ===")
         
         # 표준 데이터셋 클래스 정의
@@ -197,6 +198,7 @@ class OptimizedEfficientViTInference:
         self.num_classes = None
         self.class_names = None
         self.class_colors = None
+        self.no_interpolation = no_interpolation
         
         # 젯슨 최적화
         if optimize_jetson:
@@ -212,7 +214,25 @@ class OptimizedEfficientViTInference:
         
         self.model_name = model_name
         self.model_info = model_info
-        self.device = device if torch.cuda.is_available() else "cpu"
+        self.device = device if torch.cuda.is_available() else "cpu"  # 이 줄을 여기로 이동
+        
+        # 🔥 사용자 정의 입력 크기 설정
+        if custom_input_size:
+            self.input_size = custom_input_size
+            print(f"Using custom input size: {custom_input_size}")
+        else:
+            self.input_size = model_info['input_size']
+            print(f"Using default input size: {self.input_size}")
+        
+        print(f"Selected Model: {model_name}")
+        print(f"Model Info: {model_info['description']}")
+        print(f"Parameters: {model_info['params']}")
+        print(f"Device: {self.device}")
+        print(f"No interpolation mode: {no_interpolation}")
+        
+        # self.model_name = model_name
+        # self.model_info = model_info
+        # self.device = device if torch.cuda.is_available() else "cpu"
         
         print(f"Selected Model: {model_name}")
         print(f"Model Info: {model_info['description']}")
@@ -233,8 +253,10 @@ class OptimizedEfficientViTInference:
         # 모델의 실제 클래스 수 감지 및 클래스 매핑 설정
         self.detect_and_setup_classes()
         
-        # 전처리 파이프라인
-        input_size = model_info['input_size']
+        # # 전처리 파이프라인
+        # input_size = model_info['input_size']
+        # 전처리 파이프라인 - 사용자 정의 크기 사용
+        input_size = self.input_size  # self.input_size 사용
         self.transform = transforms.Compose([
             transforms.ToPILImage(),
             transforms.Resize(input_size),
@@ -708,8 +730,34 @@ class OptimizedEfficientViTInference:
             
         #     # CPU로 이동
         #     pred_cpu = pred.cpu().numpy().astype(np.uint8)
-        """젯슨 최적화된 후처리"""
-        # torch.no_grad() 제거 (이미 inference_mode 안에 있음)
+        # """젯슨 최적화된 후처리"""
+        # # torch.no_grad() 제거 (이미 inference_mode 안에 있음)
+        # # 모델 출력 처리
+        # if isinstance(output, dict):
+        #     for key in ['out', 'seg', 'logits']:
+        #         if key in output:
+        #             logits = output[key]
+        #             break
+        #     else:
+        #         logits = list(output.values())[0]
+        # else:
+        #     logits = output
+        
+        # # 메모리 효율적인 보간 및 argmax
+        # if logits.shape[-2:] != original_shape[:2]:
+        #     upsampled_logits = torch.nn.functional.interpolate(
+        #         logits, 
+        #         size=original_shape[:2], 
+        #         mode='bilinear',  # 또는 'bicubic'
+        #         align_corners=False
+        #     )
+        # else:
+        #     upsampled_logits = logits
+        
+        # # 소프트맥스 없이 바로 argmax (메모리/연산 절약)
+        # pred = torch.argmax(upsampled_logits, dim=1).squeeze()
+        # return pred.cpu().numpy().astype(np.uint8)
+        """🔥 개선된 후처리 - no_interpolation 옵션 지원"""
         # 모델 출력 처리
         if isinstance(output, dict):
             for key in ['out', 'seg', 'logits']:
@@ -721,20 +769,37 @@ class OptimizedEfficientViTInference:
         else:
             logits = output
         
-        # 메모리 효율적인 보간 및 argmax
-        if logits.shape[-2:] != original_shape[:2]:
-            upsampled_logits = torch.nn.functional.interpolate(
-                logits, 
-                size=original_shape[:2], 
-                mode='bilinear',  # 또는 'bicubic'
-                align_corners=False
-            )
+        if self.no_interpolation:
+            # 🔥 보간법 사용 안 함 - 모델 출력 크기 그대로 사용
+            print(f"Model output shape: {logits.shape[-2:]}, Original shape: {original_shape[:2]}")
+            
+            # argmax만 수행하고 리사이즈 하지 않음
+            pred = torch.argmax(logits, dim=1).squeeze()
+            pred_np = pred.cpu().numpy().astype(np.uint8)
+            
+            # 모델 출력 크기가 원본과 다르면 경고 메시지
+            if pred_np.shape != original_shape[:2]:
+                print(f"Warning: Output size {pred_np.shape} differs from original {original_shape[:2]}")
+                print("Using nearest neighbor resize to match original size...")
+                pred_np = cv2.resize(pred_np, 
+                                (original_shape[1], original_shape[0]), 
+                                interpolation=cv2.INTER_NEAREST)
+            
+            return pred_np
         else:
-            upsampled_logits = logits
-        
-        # 소프트맥스 없이 바로 argmax (메모리/연산 절약)
-        pred = torch.argmax(upsampled_logits, dim=1).squeeze()
-        return pred.cpu().numpy().astype(np.uint8)
+            # 🔥 기존 방식 - 보간법으로 원본 크기에 맞춤
+            if logits.shape[-2:] != original_shape[:2]:
+                upsampled_logits = torch.nn.functional.interpolate(
+                    logits, 
+                    size=original_shape[:2], 
+                    mode='bilinear',
+                    align_corners=False
+                )
+            else:
+                upsampled_logits = logits
+            
+            pred = torch.argmax(upsampled_logits, dim=1).squeeze()
+            return pred.cpu().numpy().astype(np.uint8)
     
     def create_mask_visualization(self, segmentation_mask):
         """마스크만으로 구성된 시각화 생성"""
@@ -899,6 +964,8 @@ class OptimizedEfficientViTInference:
         print(f"Duration: {total_frames/fps:.1f} seconds")
         print(f"Multithreading: {multithreading}")
         print(f"Output mode: {'Masks only' if masks_only else 'Overlay'}")  # 🔥 모드 표시
+        print(f"Model input size: {self.input_size}")  # 추가
+        print(f"No interpolation: {self.no_interpolation}")  # 추가
         
         # 출력 비디오 설정
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
@@ -1208,6 +1275,8 @@ class OptimizedEfficientViTInference:
         """성능 통계 출력"""
         print(f"\n=== Performance Statistics ===")
         print(f"Model: {self.model_name} ({self.model_info['params']})")
+        print(f"Input size: {self.input_size}")  # 이 줄 추가
+        print(f"No interpolation: {self.no_interpolation}")  # 이 줄 추가
         print(f"Total frames processed: {len(inference_times)}")
         
         if inference_times:
@@ -1225,7 +1294,8 @@ class OptimizedEfficientViTInference:
             if counts:  # 빈 리스트가 아닌 경우만
                 avg_pixels = np.mean(counts)
                 max_pixels = np.max(counts)
-                percentage = (avg_pixels / (512 * 512)) * 100  # 입력 크기 기준
+                # percentage = (avg_pixels / (512 * 512)) * 100  # 입력 크기 기준
+                percentage = (avg_pixels / (self.input_size[0] * self.input_size[1])) * 100  # 입력 크기 기준
                 # 해당 클래스의 색깔 찾기
                 color_info = ""
                 if class_name in self.class_names:
@@ -1420,6 +1490,17 @@ class OptimizedEfficientViTInference:
         # 🔥 통계 완전 생략
         return result, {}
 
+def parse_input_size(size_str):
+    """입력 크기 문자열을 파싱 (예: '720x1280' -> (720, 1280))"""
+    try:
+        parts = size_str.split('x')
+        if len(parts) != 2:
+            raise ValueError("Invalid format")
+        height, width = int(parts[0]), int(parts[1])
+        return (height, width)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"Invalid input size format: {size_str}. Use format like '720x1280'")
+
 def main():
     parser = argparse.ArgumentParser(description="Optimized EfficientViT Segmentation for Jetson")
     parser.add_argument("--input", "-i", required=True, help="Input video path")
@@ -1440,12 +1521,23 @@ def main():
                        choices=["auto", "cityscapes", "ade20k", "pascal_voc", "custom_walkway"],
                        help="Class mapping dataset (auto: detect from model output)")
     parser.add_argument("--show-classes", action="store_true", help="Show detected classes and exit")
+    # 🔥 새로운 옵션들 추가
+    parser.add_argument("--input-size", type=parse_input_size, 
+                       help="Custom model input size (format: HEIGHTxWIDTH, e.g., 720x1280)")
+    parser.add_argument("--no-interpolation", action="store_true", 
+                       help="Skip interpolation in postprocessing (use model output size as-is)")
     
     args = parser.parse_args()
     
     # 모델 목록 출력
     if args.list_models:
         EfficientViTModelManager.list_models()
+        if args.input_size or args.no_interpolation:
+            print("\n=== Custom Resolution Options ===")
+            print("--input-size: Set custom model input resolution (e.g., --input-size 720x1280)")
+            print("--no-interpolation: Skip interpolation in postprocessing")
+            print("\nExample usage:")
+            print("python script.py --input video.mp4 --input-size 720x1280 --no-interpolation")
         return
     
     # 입력 파일 확인
@@ -1459,7 +1551,10 @@ def main():
             model_name=args.model, 
             device=args.device,
             optimize_jetson=not args.no_optimize,
-            class_mapping=args.class_mapping
+            # class_mapping=args.class_mapping
+            class_mapping=args.class_mapping,
+            custom_input_size=args.input_size,  # 🔥 새로운 파라미터
+            no_interpolation=args.no_interpolation  # 🔥 새로운 파라미터
         )
         
         # 클래스 정보만 출력하고 종료
