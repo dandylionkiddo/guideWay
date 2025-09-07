@@ -394,7 +394,7 @@ class SafeRealTimeCameraInference:
                     # 커스텀 모델 로드
                     model = create_efficientvit_seg_model(
                         name=model_name_mapped,
-                        dataset="cityscapes",  # 데이터셋 형식은 cityscapes 유지
+                        dataset="mapillary",  # 데이터셋 형식은 mapillary
                         weight_url=custom_model_path,
                         n_classes=self.num_classes  # 커스텀 클래스 수 사용
                     )
