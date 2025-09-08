@@ -124,30 +124,94 @@ class TensorRTInference:
         
         self.context = self.engine.create_execution_context()
         
-        # 디버깅용 텐서 정보 출력
+        # # 디버깅용 텐서 정보 출력
+        # print(f"Engine has {self.engine.num_io_tensors} I/O tensors")
+        # for i in range(self.engine.num_io_tensors):
+        #     name = self.engine.get_tensor_name(i)
+        #     shape = self.engine.get_tensor_shape(name)
+        #     dtype = self.engine.get_tensor_dtype(name)
+        #     mode = self.engine.get_tensor_mode(name)
+        #     print(f"  Tensor {i}: {name}, shape={shape}, dtype={dtype}, mode={mode}")
+        
+        # # 입출력 차원
+        # self.input_shape = (1, 3, 512, 512)
+        # self.output_shape = (1, 19, 64, 64)  # TensorRT 출력은 64x64
+        
+        # # CUDA 메모리 할당 - TensorRT 10.3 스타일
+        # self.d_input = torch.empty(1, 3, 512, 512, dtype=torch.float32, device='cuda')
+        # self.d_output = torch.empty(1, 19, 64, 64, dtype=torch.float32, device='cuda')
+        
+        # # TensorRT 10.3에서는 바인딩을 context에 직접 설정
+        # self.context.set_tensor_address('input', self.d_input.data_ptr())
+        # self.context.set_tensor_address('output', self.d_output.data_ptr())
+        
+        # self.stream = torch.cuda.Stream()
+        
+        # print(f"✓ TensorRT engine loaded successfully")
+        # 입력과 출력 텐서 정보를 동적으로 감지
+        input_shape = None
+        output_shape = None
+        input_name = None
+        output_name = None
+        
         print(f"Engine has {self.engine.num_io_tensors} I/O tensors")
+        
         for i in range(self.engine.num_io_tensors):
             name = self.engine.get_tensor_name(i)
             shape = self.engine.get_tensor_shape(name)
             dtype = self.engine.get_tensor_dtype(name)
             mode = self.engine.get_tensor_mode(name)
+            
             print(f"  Tensor {i}: {name}, shape={shape}, dtype={dtype}, mode={mode}")
+            
+            # 입력 텐서 찾기 (보통 'input'이라는 이름)
+            if mode == trt.TensorIOMode.INPUT or name.lower() == 'input':
+                input_shape = shape
+                input_name = name
+                print(f"  → Detected as INPUT tensor")
+            
+            # 출력 텐서 찾기 (보통 'output'이라는 이름)
+            elif mode == trt.TensorIOMode.OUTPUT or name.lower() == 'output':
+                output_shape = shape
+                output_name = name
+                print(f"  → Detected as OUTPUT tensor")
         
-        # 입출력 차원
-        self.input_shape = (1, 3, 512, 512)
-        self.output_shape = (1, 19, 64, 64)  # TensorRT 출력은 64x64
+        # 입출력 차원 설정
+        if input_shape is not None:
+            self.input_shape = tuple(input_shape)
+            print(f"✓ Input shape: {self.input_shape}")
+        else:
+            # 기본값 사용
+            self.input_shape = (1, 3, 512, 512)
+            input_name = 'input'
+            print(f"⚠️ Using default input shape: {self.input_shape}")
         
-        # CUDA 메모리 할당 - TensorRT 10.3 스타일
-        self.d_input = torch.empty(1, 3, 512, 512, dtype=torch.float32, device='cuda')
-        self.d_output = torch.empty(1, 19, 64, 64, dtype=torch.float32, device='cuda')
+        if output_shape is not None:
+            self.output_shape = tuple(output_shape)
+            num_classes = output_shape[1] if len(output_shape) >= 2 else 19
+            print(f"✓ Output shape: {self.output_shape}")
+            print(f"✓ Detected {num_classes} classes in TRT engine")
+        else:
+            # 기본값 사용
+            self.output_shape = (1, 19, 64, 64)
+            output_name = 'output'
+            num_classes = 19
+            print(f"⚠️ Using default output shape: {self.output_shape}")
+        
+        # CUDA 메모리 할당 - 동적 크기 사용
+        self.d_input = torch.empty(*self.input_shape, dtype=torch.float32, device='cuda')
+        self.d_output = torch.empty(*self.output_shape, dtype=torch.float32, device='cuda')
         
         # TensorRT 10.3에서는 바인딩을 context에 직접 설정
-        self.context.set_tensor_address('input', self.d_input.data_ptr())
-        self.context.set_tensor_address('output', self.d_output.data_ptr())
+        self.context.set_tensor_address(input_name, self.d_input.data_ptr())
+        self.context.set_tensor_address(output_name, self.d_output.data_ptr())
         
         self.stream = torch.cuda.Stream()
         
         print(f"✓ TensorRT engine loaded successfully")
+        print(f"  - Input: {input_name} {self.input_shape}")
+        print(f"  - Output: {output_name} {self.output_shape}")
+        print(f"  - Classes: {num_classes}")
         
     def __call__(self, input_tensor):
         """추론 실행"""
@@ -328,7 +392,15 @@ class SafeRealTimeCameraInference:
         
         # TensorRT 엔진 경로 확인
         model_suffix = self.model_name.split('_')[-1]
-        trt_path = f"jetson/efficientvit_{model_suffix}_fp16.trt"
+        # trt_path = f"jetson/efficientvit_{model_suffix}_fp16.trt"
+        # 커스텀 모델 사용 여부에 따라 다른 TRT 엔진 경로 설정
+        if self.use_custom_model:
+            # trt_path = f"jetson/efficientvit_{model_suffix}_custom_fp16.trt"
+            trt_path = f"jetson/efficientvit_{model_suffix}_custom_fp32.trt"
+            # trt_path = f"jetson/efficientvit_{model_suffix}_custom_mixed2.trt"
+            # trt_path = f"jetson/efficientvit_{model_suffix}_custom_fp32_opt.trt"
+        else:
+            trt_path = f"jetson/efficientvit_{model_suffix}_fp16.trt"
         
         # TensorRT 엔진이 있으면 사용
         if os.path.exists(trt_path):
@@ -337,7 +409,8 @@ class SafeRealTimeCameraInference:
             return TensorRTInference(trt_path)
         
         # TensorRT 엔진이 없으면 PyTorch 모델 사용
-        print("TensorRT 엔진 없음, PyTorch 모델 사용")
+        # print("TensorRT 엔진 없음, PyTorch 모델 사용")
+        print(f"TensorRT 엔진 없음 ({trt_path}), PyTorch 모델 사용")
         self.use_trt = False
         
         try:
