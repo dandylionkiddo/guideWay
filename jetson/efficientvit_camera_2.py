@@ -12,6 +12,7 @@ import atexit
 from datetime import datetime
 import tensorrt as trt
 import json
+from collections import deque
 
 # 작업 디렉토리를 부모 폴더(guideWay)로 변경 
 import sys 
@@ -110,12 +111,13 @@ class EfficientViTModelManager:
         return cls.AVAILABLE_MODELS.get(model_name, None)
 
 class TensorRTInference:
-    """TensorRT 추론 엔진 클래스 - TensorRT 10.3 호환"""
+    """TensorRT 추론 엔진 클래스 - 배치 처리 지원"""
     
-    def __init__(self, engine_path):
+    def __init__(self, engine_path, max_batch_size=4):
         """TensorRT 엔진 초기화"""
         self.logger = trt.Logger(trt.Logger.WARNING)
         self.runtime = trt.Runtime(self.logger)
+        self.max_batch_size = max_batch_size
         
         # 엔진 로드
         print(f"Loading TensorRT engine: {engine_path}")
@@ -124,31 +126,7 @@ class TensorRTInference:
         
         self.context = self.engine.create_execution_context()
         
-        # # 디버깅용 텐서 정보 출력
-        # print(f"Engine has {self.engine.num_io_tensors} I/O tensors")
-        # for i in range(self.engine.num_io_tensors):
-        #     name = self.engine.get_tensor_name(i)
-        #     shape = self.engine.get_tensor_shape(name)
-        #     dtype = self.engine.get_tensor_dtype(name)
-        #     mode = self.engine.get_tensor_mode(name)
-        #     print(f"  Tensor {i}: {name}, shape={shape}, dtype={dtype}, mode={mode}")
-        
-        # # 입출력 차원
-        # self.input_shape = (1, 3, 512, 512)
-        # self.output_shape = (1, 19, 64, 64)  # TensorRT 출력은 64x64
-        
-        # # CUDA 메모리 할당 - TensorRT 10.3 스타일
-        # self.d_input = torch.empty(1, 3, 512, 512, dtype=torch.float32, device='cuda')
-        # self.d_output = torch.empty(1, 19, 64, 64, dtype=torch.float32, device='cuda')
-        
-        # # TensorRT 10.3에서는 바인딩을 context에 직접 설정
-        # self.context.set_tensor_address('input', self.d_input.data_ptr())
-        # self.context.set_tensor_address('output', self.d_output.data_ptr())
-        
-        # self.stream = torch.cuda.Stream()
-        
-        # print(f"✓ TensorRT engine loaded successfully")
-        # 입력과 출력 텐서 정보를 동적으로 감지
+        # 입출력 텐서 정보를 동적으로 감지
         input_shape = None
         output_shape = None
         input_name = None
@@ -164,13 +142,11 @@ class TensorRTInference:
             
             print(f"  Tensor {i}: {name}, shape={shape}, dtype={dtype}, mode={mode}")
             
-            # 입력 텐서 찾기 (보통 'input'이라는 이름)
             if mode == trt.TensorIOMode.INPUT or name.lower() == 'input':
                 input_shape = shape
                 input_name = name
                 print(f"  → Detected as INPUT tensor")
             
-            # 출력 텐서 찾기 (보통 'output'이라는 이름)
             elif mode == trt.TensorIOMode.OUTPUT or name.lower() == 'output':
                 output_shape = shape
                 output_name = name
@@ -179,47 +155,64 @@ class TensorRTInference:
         # 입출력 차원 설정
         if input_shape is not None:
             self.input_shape = tuple(input_shape)
+            self.input_name = input_name
             print(f"✓ Input shape: {self.input_shape}")
         else:
-            # 기본값 사용
             self.input_shape = (1, 3, 512, 512)
-            input_name = 'input'
+            self.input_name = 'input'
             print(f"⚠️ Using default input shape: {self.input_shape}")
         
         if output_shape is not None:
             self.output_shape = tuple(output_shape)
+            self.output_name = output_name
             num_classes = output_shape[1] if len(output_shape) >= 2 else 19
             print(f"✓ Output shape: {self.output_shape}")
             print(f"✓ Detected {num_classes} classes in TRT engine")
         else:
-            # 기본값 사용
             self.output_shape = (1, 19, 64, 64)
-            output_name = 'output'
+            self.output_name = 'output'
             num_classes = 19
             print(f"⚠️ Using default output shape: {self.output_shape}")
         
-        # CUDA 메모리 할당 - 동적 크기 사용
-        self.d_input = torch.empty(*self.input_shape, dtype=torch.float32, device='cuda')
-        self.d_output = torch.empty(*self.output_shape, dtype=torch.float32, device='cuda')
-        
-        # TensorRT 10.3에서는 바인딩을 context에 직접 설정
-        self.context.set_tensor_address(input_name, self.d_input.data_ptr())
-        self.context.set_tensor_address(output_name, self.d_output.data_ptr())
+        # 배치별 CUDA 메모리 미리 할당
+        self.batch_buffers = {}
+        for batch_size in range(1, max_batch_size + 1):
+            input_shape = (batch_size, *self.input_shape[1:])
+            output_shape = (batch_size, *self.output_shape[1:])
+            
+            self.batch_buffers[batch_size] = {
+                'input': torch.empty(*input_shape, dtype=torch.float32, device='cuda'),
+                'output': torch.empty(*output_shape, dtype=torch.float32, device='cuda')
+            }
         
         self.stream = torch.cuda.Stream()
         
-        print(f"✓ TensorRT engine loaded successfully")
-        print(f"  - Input: {input_name} {self.input_shape}")
-        print(f"  - Output: {output_name} {self.output_shape}")
-        print(f"  - Classes: {num_classes}")
+        print(f"✓ TensorRT engine loaded with batch support (max_batch={max_batch_size})")
         
     def __call__(self, input_tensor):
-        """추론 실행"""
-        # 입력 복사
-        self.d_input.copy_(input_tensor)
+        """배치 추론 실행"""
+        batch_size = input_tensor.shape[0]
         
-        # TensorRT 추론 - TensorRT 10.3 API
-        # execute_async_v3는 stream handle만 받음
+        if batch_size not in self.batch_buffers:
+            # 동적으로 새 배치 크기 지원
+            input_shape = (batch_size, *self.input_shape[1:])
+            output_shape = (batch_size, *self.output_shape[1:])
+            
+            self.batch_buffers[batch_size] = {
+                'input': torch.empty(*input_shape, dtype=torch.float32, device='cuda'),
+                'output': torch.empty(*output_shape, dtype=torch.float32, device='cuda')
+            }
+        
+        buffers = self.batch_buffers[batch_size]
+        
+        # 입력 복사
+        buffers['input'].copy_(input_tensor)
+        
+        # 컨텍스트에 텐서 주소 설정
+        self.context.set_tensor_address(self.input_name, buffers['input'].data_ptr())
+        self.context.set_tensor_address(self.output_name, buffers['output'].data_ptr())
+        
+        # TensorRT 추론
         success = self.context.execute_async_v3(self.stream.cuda_stream)
         
         if not success:
@@ -227,23 +220,17 @@ class TensorRTInference:
             
         self.stream.synchronize()
         
-        # # 64x64를 512x512로 업샘플링
-        # output_upsampled = torch.nn.functional.interpolate(
-        #     self.d_output,
-        #     size=(512, 512),
-        #     mode='bilinear',
-        #     align_corners=False
-        # )
-        
-        # return output_upsampled
-        # 업샘플링 제거 - 64x64 그대로 반환
-        return self.d_output  # 512x512 업샘플링 삭제
+        return buffers['output']
 
 class SafeRealTimeCameraInference:
     def __init__(self, model_name="efficientvit_seg_l1", device="cuda", optimize_jetson=True, 
-                #  mask_mode=False):
-                 mask_mode=False, use_custom_model=True):
+                 mask_mode=False, use_custom_model=True, batch_size=1):
         print(f"\n=== Initializing Safe Real-time Camera Inference ===")
+        
+        # 배치 처리 설정
+        self.batch_size = min(max(1, batch_size), 8)  # 1-8 사이로 제한
+        self.frame_buffer = deque(maxlen=self.batch_size)
+        self.result_queue = deque()
         
         # 커스텀 모델 사용 플래그
         self.use_custom_model = use_custom_model
@@ -267,6 +254,7 @@ class SafeRealTimeCameraInference:
         print(f"Device: {self.device}")
         print(f"Output Mode: {'Mask only' if mask_mode else 'Overlay'}")
         print(f"Using Custom Model: {use_custom_model}")
+        print(f"Batch Size: {self.batch_size}")
         
         # 시스템 최적화
         if optimize_jetson:
@@ -296,15 +284,6 @@ class SafeRealTimeCameraInference:
         # 모델 로드
         self.model = self.load_model()
         
-        # # 클래스 설정 (Cityscapes 19개 클래스)
-        # self.class_names = [
-        #     'road', 'sidewalk', 'building', 'wall', 'fence', 'pole', 'traffic_light',
-        #     'traffic_sign', 'vegetation', 'terrain', 'sky', 'person', 'rider', 'car',
-        #     'truck', 'bus', 'train', 'motorcycle', 'bicycle'
-        # ]
-        # self.num_classes = len(self.class_names)
-        # self.class_colors = self.generate_color_palette(self.num_classes)
-        
         # 전처리 파이프라인
         self.input_size = model_info['input_size']
         self.transform = transforms.Compose([
@@ -315,10 +294,8 @@ class SafeRealTimeCameraInference:
                                std=[0.229, 0.224, 0.225])
         ])
         
-        # # 종료 플래그
-        # self.stop_processing = threading.Event()
-        # 종료 플래그 - threading.Event() 대신 단순 boolean 사용
-        self.stop_processing = False  # 변경: threading.Event() -> False
+        # 종료 플래그
+        self.stop_processing = False
         
         # 안전한 종료를 위한 변수
         self.output_writer = None
@@ -345,8 +322,7 @@ class SafeRealTimeCameraInference:
         """안전한 정리 작업"""
         print("\n=== Performing safe cleanup ===")
         
-        # self.stop_processing.set()
-        self.stop_processing = True  # 변경: set() -> True
+        self.stop_processing = True
         
         if self.output_writer is not None:
             try:
@@ -392,13 +368,8 @@ class SafeRealTimeCameraInference:
         
         # TensorRT 엔진 경로 확인
         model_suffix = self.model_name.split('_')[-1]
-        # trt_path = f"jetson/efficientvit_{model_suffix}_fp16.trt"
-        # 커스텀 모델 사용 여부에 따라 다른 TRT 엔진 경로 설정
         if self.use_custom_model:
-            # trt_path = f"jetson/efficientvit_{model_suffix}_custom_fp16.trt"
-            trt_path = f"jetson/efficientvit_{model_suffix}_custom_fp32.trt"
-            # trt_path = f"jetson/efficientvit_{model_suffix}_custom_mixed2.trt"
-            # trt_path = f"jetson/efficientvit_{model_suffix}_custom_fp32_opt.trt"
+            trt_path = f"jetson/efficientvit_{model_suffix}_custom_fp32_opt.trt"
         else:
             trt_path = f"jetson/efficientvit_{model_suffix}_fp16.trt"
         
@@ -406,10 +377,9 @@ class SafeRealTimeCameraInference:
         if os.path.exists(trt_path):
             print(f"✓ TensorRT 엔진 발견: {trt_path}")
             self.use_trt = True
-            return TensorRTInference(trt_path)
+            return TensorRTInference(trt_path, max_batch_size=self.batch_size)
         
         # TensorRT 엔진이 없으면 PyTorch 모델 사용
-        # print("TensorRT 엔진 없음, PyTorch 모델 사용")
         print(f"TensorRT 엔진 없음 ({trt_path}), PyTorch 모델 사용")
         self.use_trt = False
         
@@ -427,36 +397,6 @@ class SafeRealTimeCameraInference:
             
             model_name_mapped = model_mapping.get(self.model_name, 'efficientvit-seg-b0')
             
-            # if model_name_mapped in REGISTERED_EFFICIENTVIT_SEG_MODEL:
-            #     model_builder, norm_eps, registered_path = REGISTERED_EFFICIENTVIT_SEG_MODEL[model_name_mapped]
-                
-            #     current_dir = os.getcwd()
-            #     efficientvit_path = os.path.join(current_dir, "efficientvit", registered_path)
-                
-            #     if os.path.exists(efficientvit_path):
-            #         print(f"✓ 로컬 체크포인트 발견: {efficientvit_path}")
-            #         model = create_efficientvit_seg_model(
-            #             name=model_name_mapped,
-            #             dataset="cityscapes",
-            #             weight_url=efficientvit_path,
-            #             n_classes=19
-            #         )
-            #     else:
-            #         print(f"온라인에서 모델 다운로드...")
-            #         model = create_efficientvit_seg_model(
-            #             name=model_name_mapped,
-            #             dataset="cityscapes",
-            #             pretrained=True,
-            #             weight_url=None,
-            #             n_classes=19
-            #         )
-            # else:
-            #     model = create_efficientvit_seg_model(
-            #         name=model_name_mapped,
-            #         dataset="cityscapes",
-            #         pretrained=True,
-            #         n_classes=19
-            #     )
             if self.use_custom_model:
                 # 커스텀 모델 사용
                 custom_model_path = "ft-0.0005-coloraug.pt"
@@ -464,12 +404,11 @@ class SafeRealTimeCameraInference:
                 if os.path.exists(custom_model_path):
                     print(f"✓ 커스텀 모델 발견: {custom_model_path}")
                     
-                    # 커스텀 모델 로드
                     model = create_efficientvit_seg_model(
                         name=model_name_mapped,
-                        dataset="mapillary",  # 데이터셋 형식은 mapillary
+                        dataset="mapillary",
                         weight_url=custom_model_path,
-                        n_classes=self.num_classes  # 커스텀 클래스 수 사용
+                        n_classes=self.num_classes
                     )
                     print(f"✓ 커스텀 모델 로드 완료: {custom_model_path}")
                 else:
@@ -498,7 +437,7 @@ class SafeRealTimeCameraInference:
                                 n_classes=19
                             )
             else:
-                # 기본 모델 사용 (기존 코드와 동일)
+                # 기본 모델 사용
                 if model_name_mapped in REGISTERED_EFFICIENTVIT_SEG_MODEL:
                     model_builder, norm_eps, registered_path = REGISTERED_EFFICIENTVIT_SEG_MODEL[model_name_mapped]
                     
@@ -538,8 +477,8 @@ class SafeRealTimeCameraInference:
         model = model.to(self.device)
         model.eval()
         
-        # JIT 컴파일
-        if self.device == "cuda" and hasattr(torch, 'jit'):
+        # JIT 컴파일 (배치 지원)
+        if self.device == "cuda" and hasattr(torch, 'jit') and self.batch_size == 1:
             try:
                 dummy_input = torch.randn(1, 3, *self.model_info['input_size']).to(self.device)
                 with torch.no_grad():
@@ -549,13 +488,14 @@ class SafeRealTimeCameraInference:
             except Exception as e:
                 print(f"TorchScript 최적화 실패: {e}")
         
-        # 웜업
-        print("Warming up model...")
+        # 웜업 (배치 크기별)
+        print(f"Warming up model with batch size {self.batch_size}...")
         for _ in range(3):
-            dummy_input = torch.randn(1, 3, *self.model_info['input_size']).to(self.device)
+            dummy_input = torch.randn(self.batch_size, 3, *self.model_info['input_size']).to(self.device)
             with torch.no_grad():
                 _ = model(dummy_input)
-            torch.cuda.synchronize()
+            if torch.cuda.is_available():
+                torch.cuda.synchronize()
         print("✓ Model warmup completed")
         
         return model
@@ -609,6 +549,17 @@ class SafeRealTimeCameraInference:
         input_tensor = self.transform(frame_rgb).unsqueeze(0)
         return input_tensor.to(self.device, non_blocking=True)
     
+    def preprocess_batch(self, frames):
+        """배치 프레임 전처리"""
+        batch_tensors = []
+        for frame in frames:
+            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            input_tensor = self.transform(frame_rgb)
+            batch_tensors.append(input_tensor)
+        
+        batch = torch.stack(batch_tensors)
+        return batch.to(self.device, non_blocking=True)
+    
     def postprocess_output(self, output, original_shape):
         """모델 출력 후처리"""
         if isinstance(output, dict):
@@ -626,6 +577,31 @@ class SafeRealTimeCameraInference:
         pred = torch.argmax(upsampled_logits, dim=1).squeeze()
         return pred.byte().cpu().numpy()
     
+    def batch_inference(self, frames):
+        """배치 추론 수행"""
+        if len(frames) == 0:
+            return []
+        
+        # 배치 전처리
+        batch_input = self.preprocess_batch(frames)
+        
+        # 배치 추론
+        with torch.inference_mode():
+            batch_output = self.model(batch_input)
+        
+        # 결과 분리 및 후처리
+        results = []
+        for i in range(len(frames)):
+            if isinstance(batch_output, dict):
+                single_output = {k: v[i:i+1] for k, v in batch_output.items()}
+            else:
+                single_output = batch_output[i:i+1]
+            
+            seg_mask = self.postprocess_output(single_output, frames[i].shape[:2])
+            results.append(seg_mask)
+        
+        return results
+    
     def create_mask_visualization(self, segmentation_mask):
         """마스크 시각화 생성"""
         colored_mask = self.class_colors[segmentation_mask % len(self.class_colors)]
@@ -639,12 +615,13 @@ class SafeRealTimeCameraInference:
         overlay = cv2.addWeighted(frame, 1-alpha, colored_mask, alpha, 0)
         return overlay
     
-    def start_simple_inference(self, output_path="camera_output.mp4", 
-                              width=1280, height=720, fps=30, show_stats=True):
-        """단순화된 단일 스레드 추론"""
+    def start_batch_inference(self, output_path="camera_output.mp4", 
+                            width=1280, height=720, fps=30, show_stats=True):
+        """배치 처리를 사용한 실시간 추론"""
         
-        print(f"\n=== Starting Simple Real-time Inference ===")
+        print(f"\n=== Starting Batch Real-time Inference ===")
         print(f"Using: {'TensorRT' if self.use_trt else 'PyTorch'}")
+        print(f"Batch Size: {self.batch_size}")
         print(f"Output: {output_path}")
         print(f"Resolution: {width}x{height}")
         print(f"Output FPS: {fps}")
@@ -662,59 +639,94 @@ class SafeRealTimeCameraInference:
         cv2.resizeWindow('Camera', 960, 540)
         
         inference_times = []
+        batch_times = []
         frames_written = 0
+        frames_processed = 0
         start_time = time.time()
         
         print("Recording... Press 'q' to stop")
         
         try:
             with torch.inference_mode():
-                while True:
+                while not self.stop_processing:
+                    # 프레임 수집
                     ret, frame = cap.read()
                     if not ret:
                         continue
                     
-                    inference_start = time.time()
-                    input_tensor = self.preprocess_frame(frame)
-                    output = self.model(input_tensor)
-                    segmentation_mask = self.postprocess_output(output, frame.shape[:2])
+                    # 프레임을 버퍼에 추가
+                    self.frame_buffer.append(frame)
                     
-                    if self.mask_mode:
-                        output_frame = self.create_mask_visualization(segmentation_mask)
-                    else:
-                        output_frame = self.create_overlay_visualization(frame, segmentation_mask)
-                    
-                    inference_time = time.time() - inference_start
-                    inference_times.append(inference_time)
-                    
-                    if show_stats:
-                        current_fps = 1 / inference_time if inference_time > 0 else 0
-                        avg_fps = len(inference_times) / sum(inference_times) if inference_times else 0
+                    # 배치가 가득 차거나 타임아웃되면 처리
+                    if len(self.frame_buffer) >= self.batch_size:
+                        batch_start = time.time()
                         
-                        engine_text = "TRT" if self.use_trt else "PyTorch"
-                        cv2.putText(output_frame, f"FPS: {current_fps:.1f} | Avg: {avg_fps:.1f} | {engine_text}", 
-                                (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
-                        cv2.putText(output_frame, f"Model: {self.model_name}", 
-                                (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-                    
-                    elapsed = time.time() - start_time
-                    expected_frames = int(elapsed * fps)
-                    
-                    while frames_written < expected_frames:
-                        out.write(output_frame)
-                        frames_written += 1
-                    
-                    display = cv2.resize(output_frame, (960, 540))
-                    cv2.putText(display, f"Recording: {elapsed:.1f}s | Frames: {frames_written}", 
-                            (10, 510), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
-                    cv2.imshow('Camera', display)
+                        # 현재 배치 가져오기
+                        current_batch = list(self.frame_buffer)
+                        self.frame_buffer.clear()
+                        
+                        # 배치 추론
+                        inference_start = time.time()
+                        batch_results = self.batch_inference(current_batch)
+                        inference_time = time.time() - inference_start
+                        
+                        inference_times.append(inference_time)
+                        batch_times.append((time.time() - batch_start, len(current_batch)))
+                        
+                        # 결과를 큐에 추가
+                        for frame, seg_mask in zip(current_batch, batch_results):
+                            self.result_queue.append((frame, seg_mask))
+                            frames_processed += 1
+                        
+                    # 결과 큐에서 프레임 처리 및 저장
+                    while self.result_queue:
+                        frame, segmentation_mask = self.result_queue.popleft()
+                        
+                        if self.mask_mode:
+                            output_frame = self.create_mask_visualization(segmentation_mask)
+                        else:
+                            output_frame = self.create_overlay_visualization(frame, segmentation_mask)
+                        
+                        # 통계 표시 (원본 스타일)
+                        if show_stats and inference_times:
+                            # 현재 FPS 계산 (배치 크기 고려)
+                            latest_inference_time = inference_times[-1] if inference_times else 0
+                            current_fps = self.batch_size / latest_inference_time if latest_inference_time > 0 else 0
+                            
+                            # 평균 FPS 계산
+                            avg_inference_time = sum(inference_times) / len(inference_times) if inference_times else 0
+                            avg_fps = self.batch_size / avg_inference_time if avg_inference_time > 0 else 0
+                            
+                            engine_text = "TRT" if self.use_trt else "PyTorch"
+                            cv2.putText(output_frame, f"FPS: {current_fps:.1f} | Avg: {avg_fps:.1f} | {engine_text}", 
+                                    (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+                            cv2.putText(output_frame, f"Model: {self.model_name}", 
+                                    (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+                        
+                        # 프레임 저장
+                        elapsed = time.time() - start_time
+                        expected_frames = int(elapsed * fps)
+                        
+                        while frames_written < expected_frames:
+                            out.write(output_frame)
+                            frames_written += 1
+                        
+                        # 디스플레이 (가장 최근 프레임만)
+                        display = cv2.resize(output_frame, (960, 540))
+                        cv2.putText(display, f"Recording: {elapsed:.1f}s | Frames: {frames_written}", 
+                                (10, 510), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+                        cv2.imshow('Camera', display)
                     
                     if cv2.waitKey(1) & 0xFF == ord('q'):
                         break
                     
-                    if frames_written % 100 == 0:
-                        avg_fps = len(inference_times) / sum(inference_times)
-                        print(f"Processed: {len(inference_times)} | Saved: {frames_written} | Avg FPS: {avg_fps:.2f}")
+                    # 주기적 상태 출력
+                    if frames_processed % 100 == 0 and frames_processed > 0:
+                        if inference_times:
+                            avg_inference = sum(inference_times) / len(inference_times)
+                            batch_fps = self.batch_size / avg_inference if avg_inference > 0 else 0
+                            print(f"Processed: {frames_processed} | Saved: {frames_written} | "
+                                  f"Batch FPS: {batch_fps:.2f} | Queue: {len(self.result_queue)}")
                         
         except KeyboardInterrupt:
             print("\nStopped by user")
@@ -729,13 +741,21 @@ class SafeRealTimeCameraInference:
             
             print(f"\n✓ Recording completed")
             print(f"✓ Duration: {time.time() - start_time:.1f}s")
-            print(f"✓ Frames: {frames_written}")
+            print(f"✓ Frames processed: {frames_processed}")
+            print(f"✓ Frames written: {frames_written}")
             print(f"✓ Saved: {output_path}")
+            
+            if inference_times:
+                avg_inference = sum(inference_times) / len(inference_times)
+                batch_fps = self.batch_size / avg_inference if avg_inference > 0 else 0
+                print(f"✓ Average batch inference time: {avg_inference*1000:.2f}ms")
+                print(f"✓ Average batch FPS: {batch_fps:.2f}")
+                print(f"✓ Effective throughput: {frames_processed / (time.time() - start_time):.2f} fps")
         
         return True
 
 def main():
-    parser = argparse.ArgumentParser(description="Safe Real-time EfficientViT Camera Inference")
+    parser = argparse.ArgumentParser(description="Safe Real-time EfficientViT Camera Inference with Batch Processing")
     parser.add_argument("--model", "-m", default="efficientvit_seg_l1", 
                        choices=list(EfficientViTModelManager.AVAILABLE_MODELS.keys()),
                        help="EfficientViT model name")
@@ -743,6 +763,7 @@ def main():
     parser.add_argument("--width", "-w", type=int, default=1280, help="Camera width")
     parser.add_argument("--height", type=int, default=720, help="Camera height")
     parser.add_argument("--fps", type=int, default=30, help="Output video FPS")
+    parser.add_argument("--batch-size", "-b", type=int, default=1, help="Batch size for inference (1-8)")
     parser.add_argument("--device", default="cuda", help="Device (cuda/cpu)")
     parser.add_argument("--no-optimize", action="store_true", help="Skip Jetson optimization")
     parser.add_argument("--no-stats", action="store_true", help="Hide performance overlay")
@@ -760,26 +781,30 @@ def main():
         print("\n=== Model Options ===")
         print("Default: Use custom model (ft-0.0005-coloraug.pt)")
         print("--use-default: Use original Cityscapes model")
+        print("\n=== Batch Processing ===")
+        print("--batch-size N: Process N frames at once (1-8)")
+        print("  Higher batch size = higher throughput but more latency")
+        print("  Recommended: 2-3 for Jetson Orin")
         return
     
     if args.output is None:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         mode_suffix = "mask" if args.mask_mode else "overlay"
-        # args.output = f"camera_{mode_suffix}_{args.model}_{timestamp}.mp4"
         model_suffix = "default" if args.use_default else "custom"
-        args.output = f"camera_{mode_suffix}_{model_suffix}_{args.model}_{timestamp}.mp4"
+        batch_suffix = f"batch{args.batch_size}" if args.batch_size > 1 else ""
+        args.output = f"camera_{mode_suffix}_{model_suffix}_{batch_suffix}_{args.model}_{timestamp}.mp4"
     
     try:
         inferencer = SafeRealTimeCameraInference(
             model_name=args.model,
             device=args.device,
             optimize_jetson=not args.no_optimize,
-            # mask_mode=args.mask_mode
             mask_mode=args.mask_mode,
-            use_custom_model=not args.use_default  # 커스텀 모델 사용 플래그
+            use_custom_model=not args.use_default,
+            batch_size=args.batch_size
         )
         
-        inferencer.start_simple_inference(
+        inferencer.start_batch_inference(
             output_path=args.output,
             width=args.width,
             height=args.height,
