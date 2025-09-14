@@ -1,17 +1,56 @@
 # guideWay
 ---
-* 데이터셋 저장 X, 코드 위주로 저장하기
 
-## 시작 코드
+## Project Overview
+
+This repository contains the implementation of the semantic segmentation module developed for [**Bedivere**](https://aidall.ai/), a walking-assistance robot for the visually impaired by [**Aidall**](https://aidall.ai/).  
+
+We conducted experiments to enable real-time semantic segmentation on [**Jetson Orin Nano**](https://developer.nvidia.com/embedded/jetson-orin).  
+
+This project is based on the official [**EfficientViT**](https://github.com/mit-han-lab/efficientvit) repository, from which we imported the segmentation-related components and implemented complete training and validation pipelines.  
+In addition, for comparison, we fully re-implemented [**SegFormer**](https://github.com/NVlabs/SegFormer) from scratch to make both training and validation available within the same framework.  
+
+---
+
+## Environment Setup
+
 <pre>conda create -n efficientvit python=3.10
 conda activate efficientvit
-pip install -U -r requirements.txt  </pre>
+pip install -U pip setuptools wheel
+pip install -U "Cython>=0.29.36"
+pip install -U -r requirements.txt
+export PYTHONPATH=$PWD:$PYTHONPATH  </pre>
 
-## 학습 실행 코드
+---
+
+## Training
+
+### EfficientViT
 <pre>PYTHONUTF8=1 python applications/efficientvit_seg/train.py \
-  --config applications/efficientvit_seg/mapillary.yaml \
-  --path output/seg_test_run  </pre>
+  --config applications/efficientvit_seg/custom_seg.yaml \
+  --path output/seg_test_run \
+  --arch efficientvit </pre>
+  
+### SegFormer
+<pre>PYTHONUTF8=1 python applications/efficientvit_seg/train.py \
+  --config applications/efficientvit_seg/custom_seg.yaml \
+  --path output/seg_test_run \
+  --arch segformer </pre>
 
-## 현재 문제점
-1. inference를 수행하는 코드의 코드 단일 책임 원칙 지키기
-2. Mapillary 클래스 수 줄여서 학습 및 추론 가능한지 확인
+---
+
+## Evaluation
+
+### EfficientViT
+<pre>python applications/efficientvit_seg/eval.py \
+  --config applications/efficientvit_seg/eval_config.yaml \
+  --arch efficientvit </pre>
+
+### SegFormer
+<pre>PYTHONUTF8=1 python applications/efficientvit_seg/train.py \
+  --eval_only --eval_checkpoint output/final_models/segformer-b0.pt \
+  --config applications/efficientvit_seg/custom_seg.yaml \
+  --arch segformer --path ./output/evaluation_results \
+  --save_eval_results </pre>
+
+---
